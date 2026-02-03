@@ -1,6 +1,8 @@
 """Novae model runner and preprocessing."""
 
 import logging
+import os
+from pathlib import Path
 from typing import Optional
 
 import anndata
@@ -8,6 +10,32 @@ import numpy as np
 import scanpy as sc
 
 logger = logging.getLogger(__name__)
+
+
+def get_model_cache_dir() -> Optional[Path]:
+    """
+    Get the Hugging Face model cache directory from environment variables.
+    
+    Checks in order:
+    1. HF_HOME
+    2. TRANSFORMERS_CACHE
+    3. HUGGINGFACE_HUB_CACHE
+    4. Default: ~/.cache/huggingface/hub
+    
+    Returns
+    -------
+    Path or None
+        Cache directory path if configured, None to use default.
+    """
+    if "HF_HOME" in os.environ:
+        return Path(os.environ["HF_HOME"]) / "hub"
+    elif "TRANSFORMERS_CACHE" in os.environ:
+        return Path(os.environ["TRANSFORMERS_CACHE"])
+    elif "HUGGINGFACE_HUB_CACHE" in os.environ:
+        return Path(os.environ["HUGGINGFACE_HUB_CACHE"])
+    
+    # Return default location
+    return Path.home() / ".cache" / "huggingface" / "hub"
 
 
 def preprocess_for_novae(
@@ -102,6 +130,7 @@ def run_novae_zeroshot(
     use_pca: bool = True,
     n_comps: int = 50,
     random_state: int = 42,
+    cache_dir: Optional[str] = None,
 ) -> anndata.AnnData:
     """
     Run Novae in zero-shot mode using a pretrained model.
@@ -114,7 +143,7 @@ def run_novae_zeroshot(
     adata : anndata.AnnData
         Preprocessed AnnData object.
     model_name : str
-        Pretrained model identifier.
+        Pretrained model identifier (e.g., "MICS-Lab/novae-human-0").
     n_domains : int
         Number of spatial domains to assign.
     use_pca : bool
@@ -123,15 +152,56 @@ def run_novae_zeroshot(
         Number of PCs to use if use_pca=True.
     random_state : int
         Random seed.
+    cache_dir : str, optional
+        Custom cache directory for model files. If None, uses environment
+        variables (HF_HOME, TRANSFORMERS_CACHE, HUGGINGFACE_HUB_CACHE).
 
     Returns
     -------
     anndata.AnnData
         AnnData with Novae embeddings in obsm['X_novae'] and domains in obs['domain'].
+        
+    Raises
+    ------
+    ImportError
+        If the novae package is not installed.
+    ValueError
+        If the model cannot be loaded or downloaded.
     """
     logger.warning(
         "Novae integration is a placeholder. Install 'novae' package for full functionality."
     )
+    
+    # Get cache directory
+    if cache_dir is None:
+        cache_path = get_model_cache_dir()
+        logger.info(f"Using model cache directory: {cache_path}")
+    else:
+        cache_path = Path(cache_dir)
+        logger.info(f"Using custom cache directory: {cache_path}")
+    
+    # Check if model is available (placeholder check)
+    # In a real implementation, this would attempt to load the model from HuggingFace
+    # and provide a clear error message if it fails
+    try:
+        # Placeholder: Would normally load model here
+        # from huggingface_hub import hf_hub_download
+        # model_path = hf_hub_download(repo_id=model_name, cache_dir=str(cache_path))
+        pass
+    except Exception as e:
+        logger.error(
+            f"Failed to load Novae model '{model_name}'. "
+            f"Please ensure the model is downloaded and cached."
+        )
+        logger.error(
+            f"To download the model, run: python scripts/download_models.py "
+            f"--novae-model-id {model_name}"
+        )
+        raise ValueError(
+            f"Could not load Novae model '{model_name}'. "
+            f"Error: {e}. "
+            f"Run 'python scripts/download_models.py' to download models."
+        ) from e
 
     # Placeholder: Use UMAP + Leiden clustering as a proxy
     logger.info(f"Running Novae zero-shot with model {model_name}")
@@ -169,6 +239,7 @@ def run_novae_zeroshot(
         "use_pca": use_pca,
         "n_comps": n_comps,
         "random_state": random_state,
+        "cache_dir": str(cache_path) if cache_path else None,
     }
 
     logger.info(

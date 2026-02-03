@@ -1,0 +1,25 @@
+# Requirements file optimized for uv package manager
+# Install with: uv pip install -r requirements-uv.txt
+
+# Core dependencies
+anndata>=0.9.0
+scanpy>=1.9.0
+pandas>=1.5.0
+numpy>=1.23.0
+scipy>=1.9.0
+matplotlib>=3.6.0
+seaborn>=0.12.0
+plotly>=5.13.0
+streamlit>=1.20.0
+pyyaml>=6.0
+pyarrow>=10.0.0
+scikit-learn>=1.2.0
+click>=8.0.0
+tqdm>=4.64.0
+h5py>=3.7.0
+
+# Model downloading and caching
+huggingface-hub>=0.20.0
+
+# Note: This is the same as requirements.txt but explicitly for uv
+# For optional histology features, see requirements-histology.txt
