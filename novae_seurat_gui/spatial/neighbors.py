@@ -56,7 +56,7 @@ def compute_neighbors(
         connectivities = radius_neighbors_graph(
             coords, radius=radius, mode="connectivity", include_self=False
         )
-        distances = radius_neighbors_graph(
+        distances_sparse = radius_neighbors_graph(
             coords, radius=radius, mode="distance", include_self=False
         )
 
