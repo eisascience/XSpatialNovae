@@ -1,12 +1,13 @@
 # Novae-Seurat-GUI
 
-Python-first workflow to run the [Novae spatial foundation model](https://www.nature.com/articles/s41592-024-02465-w) on Seurat objects (R) exported to AnnData (Python), with an interactive GUI for quality control, parameter tuning, model runs, visualization, and export back to R/Seurat.
+Python-first workflow to run the [Novae spatial foundation model](https://www.nature.com/articles/s41592-024-02465-w) on Seurat objects (R) with an interactive GUI for quality control, parameter tuning, model runs, visualization, and export back to R/Seurat.
 
 ## Overview
 
 This toolkit bridges the gap between R/Seurat spatial analysis workflows and Python-based deep learning models for spatial biology. It provides:
 
-- **Seamless R ↔ Python interoperability**: Load Seurat objects exported as H5AD, process with Novae, export results back to R
+- **Seamless R ↔ Python interoperability**: Load Seurat objects directly from .rds or via H5AD, process with Novae, export results back to R
+- **First-class .rds support**: Upload Seurat .rds files directly in the GUI with automatic conversion to H5AD
 - **Interactive Streamlit GUI**: Visual quality control, parameter tuning, and results exploration
 - **Command-line interface**: Scriptable workflows for batch processing and reproducibility
 - **Dual modality support**: 
@@ -18,7 +19,9 @@ This toolkit bridges the gap between R/Seurat spatial analysis workflows and Pyt
 ## Features
 
 ### Input/Output
-- Import Seurat objects via H5Seurat/H5AD interchange format
+- **Input formats**: 
+  - **.rds** (Seurat objects): Direct upload with automatic conversion
+  - **.h5ad** (AnnData): Direct upload, ready for analysis
 - Auto-detect spatial coordinates, sample identifiers, and cell metadata
 - Export domain assignments, embeddings, and QC-filtered cell lists
 - Generate R code snippets for seamless Seurat integration
@@ -189,6 +192,78 @@ pip install -e ".[histology]"
 
 **Note**: If you don't need histology features, you can safely skip this entire section. The core Novae workflow for spatial transcriptomics works without OpenSlide.
 
+### R Dependencies (for .rds Seurat Support)
+
+If you want to upload Seurat .rds files directly in the GUI, you need to install R and several R packages. **This is optional** - you can still use the tool with H5AD files without R.
+
+#### When to Install R Dependencies
+
+Install R dependencies if you:
+- Want to upload Seurat .rds files directly in the GUI
+- Need to use the CLI `convert` command for .rds to .h5ad conversion
+- Prefer working with Seurat objects in R and want seamless integration
+
+#### R Installation
+
+**Recommended: R version >= 4.2**
+
+**macOS:**
+```bash
+# Using Homebrew
+brew install r
+
+# Or download from CRAN
+# https://cran.r-project.org/bin/macosx/
+```
+
+**Ubuntu/Debian:**
+```bash
+sudo apt-get update
+sudo apt-get install r-base r-base-dev
+```
+
+**Windows:**
+1. Download R from https://cran.r-project.org/bin/windows/base/
+2. Run the installer
+3. Ensure R is added to your system PATH
+
+#### Required R Packages
+
+After installing R, install these packages:
+
+```r
+# Start R and run:
+install.packages(c("Seurat", "hdf5r", "optparse"))
+
+# Install remotes if not already installed
+if (!requireNamespace("remotes", quietly = TRUE)) {
+    install.packages("remotes")
+}
+
+# Install SeuratDisk from GitHub
+remotes::install_github("mojaveazure/seurat-disk")
+```
+
+#### Verify Installation
+
+Check that R and packages are correctly installed:
+
+```bash
+# Check R is available
+Rscript --version
+
+# Check packages (from terminal)
+Rscript -e "library(Seurat); library(SeuratDisk); library(hdf5r); library(optparse); cat('All packages loaded successfully\n')"
+```
+
+Or use the built-in checker:
+```bash
+# From Python
+python -c "from novae_seurat_gui.io import check_r_available, check_r_packages; print(check_r_available()); print(check_r_packages())"
+```
+
+**Note**: Without R dependencies, you can still use the GUI with H5AD files. The GUI will show a friendly error message if you try to upload .rds files without R installed.
+
 ### Download Models / Assets
 
 Novae model weights are hosted on [Hugging Face](https://huggingface.co/MICS-Lab) and may be downloaded automatically when first used. However, for **offline/cluster environments** or to avoid delays during first run, you can prefetch and cache them.
@@ -253,6 +328,9 @@ Then navigate to `http://localhost:8501` in your browser.
 ### CLI Mode
 
 ```bash
+# Convert Seurat .rds to H5AD
+novae-seurat-gui convert mydata.rds --outdir ./converted --assay RNA
+
 # Validate H5AD schema
 novae-seurat-gui validate data.h5ad
 
@@ -271,7 +349,31 @@ novae-seurat-gui export processed.h5ad --output-dir results/
 
 ## Usage
 
-### 1. Prepare Data from R/Seurat
+### 1. Prepare Data
+
+**Option A: Direct .rds Upload (Recommended)**
+
+No preparation needed! Simply save your Seurat object in R and upload the .rds file:
+
+```r
+# In R: Save Seurat object
+saveRDS(seurat_obj, "mydata.rds")
+```
+
+Then upload `mydata.rds` directly in the GUI or use the CLI:
+
+```bash
+# Convert via CLI
+novae-seurat-gui convert mydata.rds --outdir ./converted \
+  --assay RNA \
+  --x-col x_slide_mm \
+  --y-col y_slide_mm \
+  --sample-id-col SampleID
+```
+
+**Option B: Manual H5AD Export (Alternative)**
+
+If you prefer, you can manually export to H5AD in R:
 
 ```r
 # In R: Export Seurat object to H5AD
@@ -286,7 +388,15 @@ Convert("data.h5Seurat", dest = "h5ad")
 ### 2. Run in Python (GUI or CLI)
 
 **Option A: Streamlit GUI**
-- Load H5AD file
+
+```bash
+streamlit run app.py
+```
+
+Then in the browser:
+- **Upload .rds or .h5ad file**: Drag and drop or browse
+  - For .rds: Configure assay and coordinate mappings
+  - For .h5ad: Ready to use immediately
 - Review and adjust detected mappings (coordinates, sample ID, cell types)
 - Apply QC filters with live preview
 - Build spatial neighbors and review diagnostics
@@ -296,6 +406,9 @@ Convert("data.h5Seurat", dest = "h5ad")
 
 **Option B: Command Line**
 ```bash
+# Convert .rds to .h5ad (if not done already)
+novae-seurat-gui convert mydata.rds --outdir ./data
+
 # Full pipeline
 novae-seurat-gui validate data.h5ad
 novae-seurat-gui preprocess data.h5ad --neighbors-radius 150
@@ -324,19 +437,45 @@ seurat_obj[["novae"]] <- novae_dr
 
 ## Data Requirements
 
-The input H5AD must contain:
+### Input Formats
+
+The tool accepts two input formats:
+
+#### 1. Seurat .rds Files (Recommended for R Users)
+
+Upload Seurat objects directly as .rds files. The tool will automatically:
+- Extract the specified assay (default: "RNA")
+- Extract spatial coordinates from metadata
+- Extract cell metadata
+- Convert to H5AD format with proper schema
+- Cache the conversion for future use
+
+**Seurat object should contain:**
+- Expression data in an assay (e.g., "RNA")
+- Spatial coordinates in `@meta.data` (e.g., `x_slide_mm`, `y_slide_mm`)
+- Sample identifiers in `@meta.data` (e.g., `SampleID`, `Tissue`)
+- Optional: Cell type annotations and other metadata
+
+#### 2. AnnData .h5ad Files
+
+Pre-converted H5AD files with the following structure:
 
 - **adata.obs**: 
-  - `cell_id` (unique identifier)
-  - `sample_id` (sample/tissue identifier)
+  - `cell_id` (unique identifier) - created automatically if missing
+  - `sample_id` (sample/tissue identifier) - auto-detected or created
   - Metadata columns (nCount_RNA, nFeature_RNA, etc.)
-- **adata.obsm["spatial"]**: Nx2 array with x, y coordinates
+- **adata.obsm["spatial"]**: Nx2 array with x, y coordinates - created from obs columns if missing
 - **adata.layers["counts"]** or **adata.X**: Raw counts matrix
 
+### Auto-Detection and Mapping
+
 The GUI auto-detects common column names but allows manual override:
-- Coordinates: `x_slide_mm`/`y_slide_mm` (preferred), `x_FOV_px`/`y_FOV_px`
-- Sample ID: `SampleID` (preferred), `Tissue`, or custom
-- Cell types: `cell_type_1`, confidence: `posterior_probability`
+- **Coordinates**: `x_slide_mm`/`y_slide_mm` (preferred), `x_FOV_px`/`y_FOV_px`, `x`/`y`
+- **Sample ID**: `SampleID` (preferred), `sample_id`, `Tissue`, `tissue`
+- **Cell types**: `cell_type_1`, `cell_type`, `celltype`
+- **Confidence**: `posterior_probability`, `confidence`
+
+For .rds files, you can specify these mappings during upload, or use "auto" to let the tool detect them.
 
 ## Configuration
 
@@ -373,7 +512,8 @@ XSpatialNovae/
 │   ├── io/                        # Data loading and validation
 │   │   ├── loader.py
 │   │   ├── validator.py
-│   │   └── converter.py
+│   │   ├── converter.py
+│   │   └── convert.py             # RDS to H5AD conversion
 │   ├── qc/                        # Quality control
 │   │   ├── filters.py
 │   │   └── summaries.py
@@ -392,11 +532,15 @@ XSpatialNovae/
 │   └── export/                    # R-friendly exports
 │       ├── writers.py
 │       └── manifest.py
+├── scripts/                       # Utility scripts
+│   ├── download_models.py
+│   └── convert_seurat_rds_to_h5ad.R  # R conversion script
 ├── configs/                       # Configuration templates
 │   ├── default_mapping.yaml
 │   └── example_run.yaml
 ├── tests/                         # Unit tests
 │   ├── test_io.py
+│   ├── test_convert.py            # Conversion tests
 │   ├── test_qc.py
 │   ├── test_spatial.py
 │   └── test_export.py
