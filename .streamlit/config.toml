@@ -1,0 +1,7 @@
+# Streamlit configuration
+# This file configures various Streamlit settings for the Novae-Seurat GUI
+
+[server]
+# Maximum file upload size in MB
+# Default is 200MB, increased to 96GB (98304 MB) to support large Seurat objects
+maxUploadSize = 98304
