@@ -233,7 +233,7 @@ After installing R, install these packages:
 
 ```r
 # Start R and run:
-install.packages(c("Seurat", "hdf5r", "optparse"))
+install.packages(c("optparse", "Seurat", "hdf5r"))
 
 # Install remotes if not already installed
 if (!requireNamespace("remotes", quietly = TRUE)) {
@@ -243,6 +243,14 @@ if (!requireNamespace("remotes", quietly = TRUE)) {
 # Install SeuratDisk from GitHub
 remotes::install_github("mojaveazure/seurat-disk")
 ```
+
+**Note on SeuratObject Versions:**
+
+This tool supports both **SeuratObject v4** (slot-based) and **SeuratObject v5** (layer-based) seamlessly. The conversion script automatically detects your SeuratObject version and uses the appropriate API:
+- **v5 (≥5.0.0)**: Uses `LayerData()` and layer-based access
+- **v4 (<5.0.0)**: Uses `GetAssayData()` with slot-based access
+
+If you're using SeuratObject v5 and encounter errors about "slot is defunct", ensure you're using the latest version of this tool which includes v5 compatibility fixes.
 
 #### Verify Installation
 

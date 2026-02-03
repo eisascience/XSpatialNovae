@@ -67,6 +67,36 @@ pip install -r requirements-histology.txt
 pip install -r requirements-histology.txt
 ```
 
+### Optional: R Dependencies for .rds Upload
+
+**Only needed if you want to upload Seurat .rds files directly. Skip if you're using H5AD files.**
+
+#### Install R (>= 4.2)
+```bash
+# macOS
+brew install r
+
+# Ubuntu/Debian
+sudo apt-get install r-base r-base-dev
+
+# Windows: Download from https://cran.r-project.org/
+```
+
+#### Install Required R Packages
+```bash
+# Run from terminal
+Rscript -e "install.packages(c('optparse', 'Seurat', 'hdf5r'))"
+Rscript -e "if (!requireNamespace('remotes', quietly = TRUE)) install.packages('remotes')"
+Rscript -e "remotes::install_github('mojaveazure/seurat-disk')"
+```
+
+#### Verify R Installation
+```bash
+Rscript -e "library(Seurat); library(SeuratDisk); library(hdf5r); library(optparse); cat('✓ All R packages ready\n')"
+```
+
+**Note:** This tool supports both SeuratObject v4 (slot-based) and v5 (layer-based) automatically.
+
 ## Usage
 
 ### 1. Streamlit GUI (Recommended for Interactive Use)
