@@ -1,0 +1,95 @@
+# Example run configuration
+# This file shows a complete example configuration for a Novae run
+
+# Input data
+input:
+  file: "data/seurat_export.h5ad"
+  
+# Column mappings (override auto-detection)
+mappings:
+  x_col: "x_slide_mm"
+  y_col: "y_slide_mm"
+  units: "mm"
+  sample_id_col: "SampleID"
+  cell_type_col: "cell_type_1"
+  confidence_col: "posterior_probability"
+
+# QC filtering
+qc:
+  enable: true
+  filters:
+    nCount_RNA:
+      min: 10
+      max: null
+    nFeature_RNA:
+      min: 5
+      max: 1000
+    Area_um2:
+      min: 50
+      max: 500
+  
+  # Boolean flags (require all to be True)
+  require_flags:
+    - "qcCellsPassed"
+
+# Preprocessing
+preprocessing:
+  target_sum: 10000.0
+  n_top_genes: 2000
+  n_comps: 50
+  skip_normalize: false
+  skip_log: false
+  random_state: 42
+
+# Spatial neighbors
+spatial:
+  method: "radius"  # or "knn"
+  radius: 150.0     # for radius method (in coordinate units)
+  k: null           # for knn method
+
+# Novae model
+novae:
+  mode: "cosmx"  # or "phenocycler"
+  
+  # For CosMx (transcriptomics) - zero-shot
+  use_pretrained: true
+  model_name: "MICS-Lab/novae-human-0"
+  
+  # Domain assignment
+  n_domains: 10
+  hierarchical: false
+  n_levels: 1
+  
+  # For PhenoCycler (proteomics) - train from scratch
+  # use_pretrained: false
+  # n_epochs: 100
+  # batch_size: 256
+  # learning_rate: 0.001
+
+# Niche analysis (optional secondary run)
+niche:
+  enable: false
+  cell_type_col: "cell_type_1"
+  confidence_col: "posterior_probability"
+  n_niches: 10
+  method: "kmeans"  # or "hierarchical"
+
+# Export
+export:
+  output_dir: "./results"
+  embedding_format: "parquet"  # or "csv"
+  include_sample_id: true
+  
+  # Files to generate
+  outputs:
+    - "domains.csv"
+    - "embeddings.parquet"
+    - "filtered_cell_ids.txt"
+    - "run_manifest.json"
+    - "import_to_seurat.R"
+
+# Visualization (for GUI)
+visualization:
+  spatial_plot_size: 2
+  embedding_plot_size: 3
+  max_edges_display: 5000  # downsample edges for performance
