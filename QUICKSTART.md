@@ -86,12 +86,15 @@ sudo apt-get install r-base r-base-dev
 ```bash
 # Run from terminal
 Rscript -e "install.packages(c('optparse', 'Seurat', 'hdf5r'))"
-Rscript -e "if (!requireNamespace('remotes', quietly = TRUE)) install.packages('remotes')"
-Rscript -e "remotes::install_github('mojaveazure/seurat-disk')"
+Rscript -e "if (!requireNamespace('remotes', quietly = TRUE)) install.packages('remotes'); remotes::install_github('mojaveazure/seurat-disk')"
 ```
 
 #### Verify R Installation
 ```bash
+# Basic verification (optparse, Seurat, hdf5r)
+Rscript -e "library(Seurat); library(hdf5r); library(optparse); cat('✓ Core packages ready\n')"
+
+# Full verification (including SeuratDisk)
 Rscript -e "library(Seurat); library(SeuratDisk); library(hdf5r); library(optparse); cat('✓ All R packages ready\n')"
 ```
 

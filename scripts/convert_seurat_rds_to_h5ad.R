@@ -120,9 +120,10 @@ get_assay_data <- function(object, assay_name, layer_or_slot = "counts") {
       }
       
       # Try to get the requested layer
-      layer_name <- paste0("counts.", DefaultLayer(assay_obj))
       if (layer_or_slot == "data") {
         layer_name <- paste0("data.", DefaultLayer(assay_obj))
+      } else {
+        layer_name <- paste0("counts.", DefaultLayer(assay_obj))
       }
       
       # Check various layer naming patterns
