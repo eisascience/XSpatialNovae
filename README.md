@@ -560,6 +560,148 @@ XSpatialNovae/
 └── README.md                     # This file
 ```
 
+## Troubleshooting
+
+### .rds Conversion Issues
+
+#### "Rscript not found in PATH"
+**Problem**: R is not installed or not in your system PATH.
+
+**Solution**:
+1. Install R (>= 4.2) from https://cran.r-project.org/
+2. Ensure R is in your PATH:
+   ```bash
+   # Test if R is accessible
+   Rscript --version
+   ```
+3. If still not working on macOS: `brew install r`
+4. If still not working on Ubuntu: `sudo apt-get install r-base r-base-dev`
+
+#### "optparse package is required but not installed"
+**Problem**: The optparse R package is missing.
+
+**Solution**:
+```bash
+Rscript -e "install.packages('optparse')"
+```
+
+#### "GetAssayData slot is defunct" or "slot not found"
+**Problem**: You're using SeuratObject v5, which changed from slot-based to layer-based access.
+
+**Solution**: This tool automatically detects and handles both v4 and v5. If you see this error:
+1. Ensure you're using the latest version of this tool
+2. Run with `--verbose` flag to see version detection:
+   ```bash
+   novae-seurat-gui convert mydata.rds --outdir ./output --verbose
+   ```
+3. If the error persists, your Seurat object may have unusual layer structure. Try:
+   ```r
+   # In R: Check your Seurat object structure
+   library(Seurat)
+   obj <- readRDS("mydata.rds")
+   print(packageVersion("SeuratObject"))
+   print(Assays(obj))
+   print(Layers(obj[["RNA"]]))  # For v5
+   ```
+
+#### "Missing R packages: Seurat, SeuratDisk, hdf5r"
+**Problem**: Required R packages are not installed.
+
+**Solution**:
+```bash
+# Install core packages
+Rscript -e "install.packages(c('Seurat', 'hdf5r'))"
+
+# Install remotes if needed
+Rscript -e "if (!requireNamespace('remotes', quietly = TRUE)) install.packages('remotes')"
+
+# Install SeuratDisk from GitHub
+Rscript -e "remotes::install_github('mojaveazure/seurat-disk')"
+```
+
+#### "Conversion timed out after 10 minutes"
+**Problem**: Very large Seurat object or slow system.
+
+**Solution**:
+1. Check object size: `object.size(seurat_obj)` in R
+2. Consider subsetting the data first in R before conversion
+3. Close other applications to free up memory
+4. The conversion is cached - subsequent runs with same parameters will be instant
+
+#### Conversion succeeds but spatial coordinates missing
+**Problem**: Auto-detection couldn't find coordinate columns.
+
+**Solution**:
+```bash
+# Manually specify coordinate columns
+novae-seurat-gui convert mydata.rds --outdir ./output \
+  --x-col "your_x_column_name" \
+  --y-col "your_y_column_name"
+```
+
+Or in the GUI: Adjust the detected mappings before clicking "Load Dataset"
+
+#### "Error: Assay RNA not found"
+**Problem**: Your Seurat object doesn't have the default "RNA" assay.
+
+**Solution**:
+```r
+# In R: Check available assays
+Assays(seurat_obj)
+```
+
+Then specify the correct assay:
+```bash
+novae-seurat-gui convert mydata.rds --outdir ./output --assay "Spatial"
+```
+
+### Other Common Issues
+
+#### "No module named 'novae_seurat_gui'"
+**Problem**: Package not installed.
+
+**Solution**:
+```bash
+pip install -e .
+```
+
+#### GUI shows blank page
+**Problem**: Streamlit not started correctly or port conflict.
+
+**Solution**:
+```bash
+# Try a different port
+streamlit run app.py --server.port 8502
+
+# Or check if another process is using 8501
+lsof -ti:8501 | xargs kill -9  # Kill process on port 8501 (macOS/Linux)
+```
+
+#### "Model not found" errors
+**Problem**: Novae model weights not downloaded.
+
+**Solution**:
+```bash
+# Prefetch the model
+python scripts/download_models.py
+
+# Or set cache directory
+export HF_HOME=/path/to/cache
+python scripts/download_models.py --cache-dir /path/to/cache
+```
+
+#### Import errors with scanpy/anndata
+**Problem**: Version conflicts or missing dependencies.
+
+**Solution**:
+```bash
+# Reinstall with clean environment
+pip uninstall scanpy anndata -y
+pip install -e .
+```
+
+For more help, please open an issue at: https://github.com/eisascience/XSpatialNovae/issues
+
 ## Testing
 
 ```bash

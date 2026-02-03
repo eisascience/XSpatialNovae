@@ -327,6 +327,54 @@ seurat_obj[["novae"]] <- novae_dr
 DimPlot(seurat_obj, reduction = "novae", group.by = "domain_level_0")
 ```
 
+## Troubleshooting
+
+### .rds Upload Issues
+
+**R not found:**
+```bash
+# Install R
+brew install r  # macOS
+sudo apt-get install r-base  # Ubuntu
+```
+
+**Missing R packages:**
+```bash
+Rscript -e "install.packages(c('optparse', 'Seurat', 'hdf5r'))"
+Rscript -e "remotes::install_github('mojaveazure/seurat-disk')"
+```
+
+**SeuratObject v5 "slot defunct" error:**
+- This tool automatically supports v4 and v5
+- Ensure you're using the latest version
+- Use `--verbose` flag to debug
+
+**Coordinate detection fails:**
+```bash
+# Specify manually
+novae-seurat-gui convert data.rds --outdir ./out \
+  --x-col "x_slide_mm" --y-col "y_slide_mm"
+```
+
+### Other Issues
+
+**Import errors:**
+```bash
+pip install -e .
+```
+
+**Streamlit blank page:**
+```bash
+streamlit run app.py --server.port 8502
+```
+
+**Model not found:**
+```bash
+python scripts/download_models.py
+```
+
+For detailed troubleshooting, see [README.md](README.md#troubleshooting)
+
 ## Testing
 
 ```bash
