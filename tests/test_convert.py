@@ -3,6 +3,7 @@
 import tempfile
 from pathlib import Path
 
+import anndata
 import numpy as np
 import pandas as pd
 import pytest
@@ -181,7 +182,7 @@ class TestEnsureAnnDataSchema:
         adata_processed = convert.ensure_anndata_schema(
             str(h5ad_path),
             x_col="x_slide_mm",
-            y_col="y_col_mm",
+            y_col="y_slide_mm",  # Fixed typo
             overwrite=True,
         )
         
@@ -251,7 +252,7 @@ class TestEnsureAnnDataSchema:
         assert "sample_id" in adata_processed.obs.columns
         
         # Verify file was saved with modifications
-        adata_reloaded = AnnData.read_h5ad(h5ad_path)
+        adata_reloaded = anndata.read_h5ad(h5ad_path)
         assert "spatial" in adata_reloaded.obsm
         assert "cell_id" in adata_reloaded.obs.columns
         assert "sample_id" in adata_reloaded.obs.columns
