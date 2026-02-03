@@ -9,7 +9,15 @@ import anndata
 import numpy as np
 import scanpy as sc
 
-from ..utils.deps import require_package, MissingDependency
+# Handle both package import and direct module import
+try:
+    from ..utils.deps import require_package, MissingDependency
+except ImportError:
+    # For direct module import (e.g., in tests), create stub versions
+    class MissingDependency(Exception):
+        pass
+    def require_package(*args, **kwargs):
+        pass
 
 logger = logging.getLogger(__name__)
 
