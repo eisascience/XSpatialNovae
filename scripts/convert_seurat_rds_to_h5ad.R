@@ -18,7 +18,7 @@ option_list <- list(
   make_option(c("--keep_meta_regex"), type = "character", default = NULL, help = "Metadata filter regex"),
   make_option(c("--overwrite"), type = "logical", default = FALSE, help = "Overwrite existing"),
   make_option(c("--verbose"), type = "logical", default = FALSE, help = "Verbose output"),
-  make_option(c("--use_legacy_conversion"), type = "logical", default = TRUE, help = "Use RNA3 trick")
+  make_option(c("--use_legacy_conversion"), type = "logical", default = TRUE, help = "Convert Assay5 to legacy Assay format for v5 compatibility")
 )
 
 opt <- parse_args(OptionParser(option_list = option_list))
@@ -71,6 +71,8 @@ if (is_v5) {
       }
       
       SeuratDisk::WriteH5Group(rownames(x), "features", xgroup, verbose)
+      # Note: Using ::: to access unexported GuessDType function from SeuratDisk
+      # This is required by SeuratDisk's HDF5 attribute API and has been stable across versions
       xgroup$create_attr("key", Seurat::Key(x), SeuratDisk:::GuessDType(Seurat::Key(x)))
       
       if (length(Seurat::VariableFeatures(x))) {
