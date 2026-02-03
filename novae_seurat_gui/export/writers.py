@@ -1,0 +1,287 @@
+"""Writers for R-friendly export formats."""
+
+import logging
+from pathlib import Path
+from typing import List, Optional
+
+import anndata
+import pandas as pd
+
+logger = logging.getLogger(__name__)
+
+
+def export_domains(
+    adata: anndata.AnnData,
+    output_file: str,
+    domain_columns: Optional[List[str]] = None,
+    include_sample_id: bool = True,
+) -> None:
+    """
+    Export domain assignments to CSV for R import.
+
+    Parameters
+    ----------
+    adata : anndata.AnnData
+        Input AnnData object with domain assignments.
+    output_file : str
+        Output CSV file path.
+    domain_columns : list of str, optional
+        List of domain column names. If None, auto-detects domain_* columns.
+    include_sample_id : bool
+        If True, include sample_id column.
+    """
+    logger.info(f"Exporting domains to {output_file}")
+
+    # Auto-detect domain columns if not specified
+    if domain_columns is None:
+        domain_columns = [col for col in adata.obs.columns if col.startswith("domain")]
+
+    if not domain_columns:
+        raise ValueError("No domain columns found in adata.obs")
+
+    # Prepare export dataframe
+    export_cols = ["cell_id"]
+    if include_sample_id and "sample_id" in adata.obs.columns:
+        export_cols.append("sample_id")
+    export_cols.extend(domain_columns)
+
+    # Ensure cell_id exists
+    if "cell_id" not in adata.obs.columns:
+        export_df = pd.DataFrame({"cell_id": adata.obs.index})
+        for col in export_cols[1:]:
+            if col in adata.obs.columns:
+                export_df[col] = adata.obs[col].values
+    else:
+        export_df = adata.obs[export_cols].copy()
+
+    # Write CSV
+    export_df.to_csv(output_file, index=False)
+    logger.info(f"Exported {len(export_df)} cells with {len(domain_columns)} domain level(s)")
+
+
+def export_embeddings(
+    adata: anndata.AnnData,
+    output_file: str,
+    embedding_key: str = "X_novae",
+    format: str = "parquet",
+) -> None:
+    """
+    Export embeddings to Parquet or CSV for R import.
+
+    Parameters
+    ----------
+    adata : anndata.AnnData
+        Input AnnData object with embeddings.
+    output_file : str
+        Output file path.
+    embedding_key : str
+        Key in adata.obsm for embeddings.
+    format : {'parquet', 'csv'}
+        Output format.
+    """
+    logger.info(f"Exporting embeddings from {embedding_key} to {output_file}")
+
+    if embedding_key not in adata.obsm:
+        raise ValueError(f"Embedding key '{embedding_key}' not found in adata.obsm")
+
+    embeddings = adata.obsm[embedding_key]
+
+    # Create dataframe with cell_id
+    if "cell_id" in adata.obs.columns:
+        cell_ids = adata.obs["cell_id"].values
+    else:
+        cell_ids = adata.obs.index.values
+
+    # Column names
+    n_dims = embeddings.shape[1]
+    col_names = [f"NOVAe_{i+1}" for i in range(n_dims)]
+
+    export_df = pd.DataFrame(embeddings, columns=col_names)
+    export_df.insert(0, "cell_id", cell_ids)
+
+    # Write file
+    if format == "parquet":
+        export_df.to_parquet(output_file, index=False)
+    elif format == "csv":
+        export_df.to_csv(output_file, index=False)
+    else:
+        raise ValueError(f"Unsupported format: {format}")
+
+    logger.info(f"Exported embeddings for {len(export_df)} cells ({n_dims} dimensions)")
+
+
+def export_filtered_cells(
+    adata: anndata.AnnData,
+    output_file: str,
+    cell_id_col: str = "cell_id",
+) -> None:
+    """
+    Export list of cell IDs that passed QC filtering.
+
+    Parameters
+    ----------
+    adata : anndata.AnnData
+        Filtered AnnData object (after QC).
+    output_file : str
+        Output text file path (one cell ID per line).
+    cell_id_col : str
+        Column name for cell IDs.
+    """
+    logger.info(f"Exporting filtered cell IDs to {output_file}")
+
+    if cell_id_col in adata.obs.columns:
+        cell_ids = adata.obs[cell_id_col].values
+    else:
+        cell_ids = adata.obs.index.values
+
+    # Write one cell ID per line
+    with open(output_file, "w") as f:
+        for cell_id in cell_ids:
+            f.write(f"{cell_id}\n")
+
+    logger.info(f"Exported {len(cell_ids)} cell IDs")
+
+
+def write_r_import_script(
+    output_file: str,
+    domains_file: str = "domains.csv",
+    embeddings_file: str = "embeddings.parquet",
+    filtered_cells_file: str = "filtered_cell_ids.txt",
+) -> None:
+    """
+    Write R script for importing results back into Seurat.
+
+    Parameters
+    ----------
+    output_file : str
+        Output R script file path.
+    domains_file : str
+        Name of domains CSV file (relative to output directory).
+    embeddings_file : str
+        Name of embeddings file (relative to output directory).
+    filtered_cells_file : str
+        Name of filtered cells file (relative to output directory).
+    """
+    logger.info(f"Writing R import script to {output_file}")
+
+    r_script = f'''# R script for importing Novae results into Seurat
+# Generated by novae-seurat-gui
+
+library(Seurat)
+library(arrow)  # For reading parquet files
+
+# Set working directory to the results folder
+# setwd("path/to/results")
+
+# 1. Load domain assignments
+domains <- read.csv("{domains_file}", row.names = "cell_id")
+
+# Merge domains into Seurat metadata
+# Assuming 'seurat_obj' is your Seurat object
+seurat_obj <- AddMetaData(seurat_obj, domains)
+
+# 2. Load embeddings
+embeddings_df <- arrow::read_parquet("{embeddings_file}")
+
+# Convert to matrix and set rownames
+embeddings_mat <- as.matrix(embeddings_df[, -1])  # Exclude cell_id column
+rownames(embeddings_mat) <- embeddings_df$cell_id
+
+# Match order with Seurat object
+embeddings_mat <- embeddings_mat[colnames(seurat_obj), ]
+
+# Create DimReduc object
+novae_dr <- CreateDimReducObject(
+  embeddings = embeddings_mat,
+  key = "NOVAe_",
+  assay = DefaultAssay(seurat_obj)
+)
+
+# Add to Seurat object
+seurat_obj[["novae"]] <- novae_dr
+
+# 3. Optional: Subset to filtered cells
+filtered_cells <- readLines("{filtered_cells_file}")
+seurat_obj_filtered <- subset(seurat_obj, cells = filtered_cells)
+
+# 4. Visualize results
+# UMAP colored by domain
+DimPlot(seurat_obj, reduction = "umap", group.by = "domain_level_0")
+
+# Novae embedding colored by domain
+DimPlot(seurat_obj, reduction = "novae", group.by = "domain_level_0")
+
+# Spatial plot colored by domain (if spatial data available)
+# SpatialDimPlot(seurat_obj, group.by = "domain_level_0")
+
+print("Novae results successfully imported into Seurat!")
+'''
+
+    with open(output_file, "w") as f:
+        f.write(r_script)
+
+    logger.info(f"R import script written to {output_file}")
+
+
+def export_all(
+    adata: anndata.AnnData,
+    output_dir: str,
+    embedding_key: str = "X_novae",
+    embedding_format: str = "parquet",
+) -> dict:
+    """
+    Export all results to a directory.
+
+    Parameters
+    ----------
+    adata : anndata.AnnData
+        Input AnnData object with Novae results.
+    output_dir : str
+        Output directory path.
+    embedding_key : str
+        Key in adata.obsm for embeddings.
+    embedding_format : str
+        Format for embeddings ('parquet' or 'csv').
+
+    Returns
+    -------
+    dict
+        Dictionary with paths to exported files.
+    """
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    logger.info(f"Exporting all results to {output_dir}")
+
+    # Export domains
+    domains_file = output_path / "domains.csv"
+    export_domains(adata, str(domains_file))
+
+    # Export embeddings
+    embeddings_ext = "parquet" if embedding_format == "parquet" else "csv"
+    embeddings_file = output_path / f"embeddings.{embeddings_ext}"
+    export_embeddings(adata, str(embeddings_file), embedding_key, embedding_format)
+
+    # Export filtered cells
+    filtered_cells_file = output_path / "filtered_cell_ids.txt"
+    export_filtered_cells(adata, str(filtered_cells_file))
+
+    # Write R import script
+    r_script_file = output_path / "import_to_seurat.R"
+    write_r_import_script(
+        str(r_script_file),
+        domains_file="domains.csv",
+        embeddings_file=f"embeddings.{embeddings_ext}",
+        filtered_cells_file="filtered_cell_ids.txt",
+    )
+
+    exported_files = {
+        "domains": str(domains_file),
+        "embeddings": str(embeddings_file),
+        "filtered_cells": str(filtered_cells_file),
+        "r_script": str(r_script_file),
+    }
+
+    logger.info("All exports complete")
+
+    return exported_files
