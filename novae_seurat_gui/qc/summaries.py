@@ -124,7 +124,7 @@ def compute_qc_summary(
 
 
 def compute_filter_stats(
-    adata: anndata.AnnData, mask: np.ndarray, group_by: Optional[str] = None
+    adata: anndata.AnnData, mask: Optional[np.ndarray] = None, group_by: Optional[str] = None
 ) -> Dict:
     """
     Compute statistics about filtering results.
@@ -133,27 +133,69 @@ def compute_filter_stats(
     ----------
     adata : anndata.AnnData
         Input AnnData object.
-    mask : np.ndarray
+    mask : np.ndarray, optional
         Boolean mask indicating cells that passed filters.
+        If None, treats all cells as passing (mask = all True).
     group_by : str, optional
         Column name to group by for per-group statistics.
+        If not provided and 'sample_id' exists in adata.obs, uses 'sample_id'.
 
     Returns
     -------
     dict
-        Dictionary with filtering statistics.
+        Dictionary with filtering statistics including:
+        - total_cells: Total number of cells
+        - kept_cells: Number of cells kept
+        - removed_cells: Number of cells removed
+        - kept_fraction: Fraction of cells kept (0-1)
+        - n_total, n_kept, n_filtered, percent_kept, percent_filtered (legacy keys)
+        - by_group: Optional per-sample/group statistics
+
+    Raises
+    ------
+    ValueError
+        If mask is not None and has invalid length or type.
     """
+    total = adata.n_obs
+    
+    # Handle None mask - treat as all True
+    if mask is None:
+        mask = np.ones(total, dtype=bool)
+        logger.info("No mask provided, treating all cells as passing filters")
+    
+    # Validate mask
+    if not isinstance(mask, (np.ndarray, pd.Series)):
+        raise ValueError(f"mask must be numpy array or pandas Series, got {type(mask)}")
+    
+    if len(mask) != total:
+        raise ValueError(
+            f"mask length ({len(mask)}) does not match number of cells ({total})"
+        )
+    
+    # Ensure boolean type
+    mask = np.asarray(mask, dtype=bool)
+    
     n_kept = np.sum(mask)
     n_filtered = np.sum(~mask)
-    total = len(mask)
 
     stats = {
+        # New keys as specified in requirements
+        "total_cells": total,
+        "kept_cells": int(n_kept),
+        "removed_cells": int(n_filtered),
+        "kept_fraction": float(n_kept / total) if total > 0 else 0.0,
+        # Legacy keys for backward compatibility
         "n_total": total,
         "n_kept": int(n_kept),
         "n_filtered": int(n_filtered),
-        "percent_kept": float(100 * n_kept / total),
-        "percent_filtered": float(100 * n_filtered / total),
+        "percent_kept": float(100 * n_kept / total) if total > 0 else 0.0,
+        "percent_filtered": float(100 * n_filtered / total) if total > 0 else 0.0,
     }
+
+    # Auto-detect group_by column if not provided
+    if group_by is None and "sample_id" in adata.obs.columns:
+        group_by = "sample_id"
+        logger.info("Using 'sample_id' for per-sample statistics")
 
     if group_by and group_by in adata.obs.columns:
         stats["by_group"] = {}
