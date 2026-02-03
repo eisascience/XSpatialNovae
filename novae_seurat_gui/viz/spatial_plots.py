@@ -110,11 +110,13 @@ def plot_spatial_scatter(
         avg_range = (x_range + y_range) / 2
         
         # Marker size as fraction of data range
-        # size parameter acts as a scaling factor
-        marker_size_data = avg_range * (size / 300.0)  # 300 is empirical for good default
+        # Empirical scaling factor: 300 gives good default visibility
+        # (approximately 3-5 pixel markers for typical coordinate ranges)
+        MARKER_SCALE_FACTOR = 300.0
+        marker_size_data = avg_range * (size / MARKER_SCALE_FACTOR)
         
-        # Use sizemode='area' with constant size value
-        # This makes all markers the same size in DATA coordinates
+        # Use sizemode='diameter' (not 'area') so size value directly
+        # corresponds to marker diameter in data units
         fig.update_traces(
             marker=dict(
                 size=marker_size_data,
@@ -220,7 +222,10 @@ def plot_qc_spatial(
         x_range = float(x.max() - x.min())
         y_range = float(y.max() - y.min())
         avg_range = (x_range + y_range) / 2
-        marker_size_data = avg_range * (size / 300.0)
+        
+        # Empirical scaling factor for good default visibility
+        MARKER_SCALE_FACTOR = 300.0
+        marker_size_data = avg_range * (size / MARKER_SCALE_FACTOR)
         
         fig.update_traces(
             marker=dict(

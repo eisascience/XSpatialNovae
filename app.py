@@ -352,20 +352,8 @@ elif page == "🔍 QC Filtering":
             st.rerun()
 
         # Build mask reactively (no apply button)
-        # Use caching decorator for efficiency
-        @st.cache_data
-        def compute_mask_cached(_adata_id, n_obs, filter_settings_tuple):
-            """Cached mask computation based on data ID and filter settings."""
-            # Convert tuple back to dict for build_filter_mask
-            filter_settings = dict(filter_settings_tuple) if filter_settings_tuple else {}
-            return qc.build_filter_mask(adata, filter_settings)
-        
-        # Create a hashable key from filter_criteria for caching
-        filter_settings_tuple = tuple(sorted(filter_criteria.items())) if filter_criteria else ()
-        adata_id = id(adata)  # Use object ID as cache key
-        
-        # Compute mask (cached)
-        mask = compute_mask_cached(adata_id, adata.n_obs, filter_settings_tuple)
+        # Compute mask directly without caching (streamlit caches renders automatically)
+        mask = qc.build_filter_mask(adata, filter_criteria)
         
         # Store in session state
         st.session_state.qc_mask = mask

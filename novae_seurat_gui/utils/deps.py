@@ -43,7 +43,7 @@ def is_in_virtualenv() -> bool:
     return (
         hasattr(sys, 'real_prefix') or  # virtualenv
         (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix) or  # venv
-        'VIRTUAL_ENV' in sys.prefix  # conda or other venvs
+        'VIRTUAL_ENV' in os.environ  # Environment variable check
     )
 
 

@@ -14,6 +14,14 @@ try:
     from ..utils.deps import require_package, MissingDependency
 except ImportError:
     # For direct module import (e.g., in tests), create stub versions
+    # Note: This bypasses dependency checking - only use for testing
+    import warnings
+    warnings.warn(
+        "Direct module import detected - dependency checking disabled. "
+        "Import through package for full functionality.",
+        ImportWarning,
+        stacklevel=2
+    )
     class MissingDependency(Exception):
         pass
     def require_package(*args, **kwargs):
