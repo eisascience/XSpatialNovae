@@ -68,6 +68,7 @@ def test_get_model_cache_dir_hf_home():
     """Test get_model_cache_dir respects HF_HOME."""
     # Import the function directly from the module file to avoid full package import
     import importlib.util
+    import tempfile
     spec = importlib.util.spec_from_file_location(
         "novae_runner", 
         Path(__file__).parent.parent / "novae_seurat_gui" / "modeling" / "novae_runner.py"
@@ -77,7 +78,7 @@ def test_get_model_cache_dir_hf_home():
     
     get_model_cache_dir = novae_runner.get_model_cache_dir
     
-    test_path = "/tmp/test_hf_home"
+    test_path = os.path.join(tempfile.gettempdir(), "test_hf_home")
     with mock.patch.dict(os.environ, {"HF_HOME": test_path}, clear=False):
         cache_dir = get_model_cache_dir()
         assert cache_dir == Path(test_path) / "hub"
@@ -87,6 +88,7 @@ def test_get_model_cache_dir_transformers_cache():
     """Test get_model_cache_dir respects TRANSFORMERS_CACHE."""
     # Import the function directly from the module file to avoid full package import
     import importlib.util
+    import tempfile
     spec = importlib.util.spec_from_file_location(
         "novae_runner", 
         Path(__file__).parent.parent / "novae_seurat_gui" / "modeling" / "novae_runner.py"
@@ -96,7 +98,7 @@ def test_get_model_cache_dir_transformers_cache():
     
     get_model_cache_dir = novae_runner.get_model_cache_dir
     
-    test_path = "/tmp/test_transformers"
+    test_path = os.path.join(tempfile.gettempdir(), "test_transformers")
     # Clear HF_HOME to test priority
     env = {"TRANSFORMERS_CACHE": test_path}
     if "HF_HOME" in os.environ:
@@ -115,6 +117,7 @@ def test_get_model_cache_dir_huggingface_hub_cache():
     """Test get_model_cache_dir respects HUGGINGFACE_HUB_CACHE."""
     # Import the function directly from the module file to avoid full package import
     import importlib.util
+    import tempfile
     spec = importlib.util.spec_from_file_location(
         "novae_runner", 
         Path(__file__).parent.parent / "novae_seurat_gui" / "modeling" / "novae_runner.py"
@@ -124,7 +127,7 @@ def test_get_model_cache_dir_huggingface_hub_cache():
     
     get_model_cache_dir = novae_runner.get_model_cache_dir
     
-    test_path = "/tmp/test_hf_hub"
+    test_path = os.path.join(tempfile.gettempdir(), "test_hf_hub")
     # Clear HF_HOME and TRANSFORMERS_CACHE to test priority
     with mock.patch.dict(os.environ, 
                          {"HUGGINGFACE_HUB_CACHE": test_path}, 
