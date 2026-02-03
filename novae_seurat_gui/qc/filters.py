@@ -10,6 +10,35 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
+def build_filter_mask(
+    adata: anndata.AnnData, filter_settings: Dict[str, tuple]
+) -> np.ndarray:
+    """
+    Build a boolean filter mask from filter settings.
+    
+    This is a pure function that can be cached based on settings.
+    
+    Parameters
+    ----------
+    adata : anndata.AnnData
+        Input AnnData object.
+    filter_settings : dict
+        Dictionary mapping column names to (min_value, max_value) tuples.
+        Use None for unbounded. Example:
+        {'nCount_RNA': (10, None), 'nFeature_RNA': (5, 1000)}
+    
+    Returns
+    -------
+    np.ndarray
+        Boolean mask where True indicates cells that pass all filters.
+    """
+    # If no filters specified, return all True
+    if not filter_settings:
+        return np.ones(adata.n_obs, dtype=bool)
+    
+    return create_filter_mask(adata, filter_settings)
+
+
 def create_filter_mask(
     adata: anndata.AnnData, filter_criteria: Dict[str, tuple]
 ) -> np.ndarray:
