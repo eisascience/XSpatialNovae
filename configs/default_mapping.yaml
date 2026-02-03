@@ -1,0 +1,100 @@
+# Default mapping configuration
+# This file defines the default column name mappings for loading Seurat-exported H5AD files
+
+# Spatial coordinates
+coordinates:
+  # Preferred column names (in order of priority)
+  x_column: "x_slide_mm"
+  x_fallback: ["x_location", "x_centroid", "x_FOV_px", "x", "X"]
+  
+  y_column: "y_slide_mm"
+  y_fallback: ["y_location", "y_centroid", "y_FOV_px", "y", "Y"]
+  
+  # Units: mm (millimeters), px (pixels), or unknown
+  units: "mm"
+  
+  # obsm key for spatial coordinates
+  spatial_key: "spatial"
+
+# Sample identification
+sample_id:
+  column: "SampleID"
+  fallback: ["sample_id", "Tissue", "tissue", "sample"]
+
+# Cell type annotations (optional)
+cell_type:
+  column: "cell_type_1"
+  fallback: ["cell_type", "celltype", "CellType", "cell_label"]
+  
+  # Confidence/probability column (optional)
+  confidence_column: "posterior_probability"
+  confidence_fallback: ["confidence", "probability", "cell_type_confidence"]
+
+# QC filters (default thresholds)
+qc_filters:
+  # Minimum counts per cell
+  nCount_RNA:
+    min: 10
+    max: null
+  
+  # Minimum features per cell
+  nFeature_RNA:
+    min: 5
+    max: null
+  
+  # Cell area (if available)
+  Area_um2:
+    min: 50
+    max: null
+  
+  # Boolean QC flags (cells with True are kept)
+  qc_flags:
+    - "qcCellsPassed"
+
+# Preprocessing defaults
+preprocessing:
+  # Normalization target sum
+  target_sum: 10000.0
+  
+  # Number of highly variable genes
+  n_top_genes: 2000
+  
+  # Number of principal components
+  n_comps: 50
+  
+  # Random seed
+  random_state: 42
+
+# Spatial neighbors defaults
+spatial_neighbors:
+  # Method: radius or knn
+  method: "radius"
+  
+  # Radius (for radius-based, in coordinate units)
+  radius: 150.0
+  
+  # K (for k-nearest neighbors)
+  k: null
+
+# Novae model defaults
+novae:
+  # Mode: cosmx (transcriptomics) or phenocycler (proteomics)
+  mode: "cosmx"
+  
+  # Pretrained model name (for zero-shot)
+  model_name: "MICS-Lab/novae-human-0"
+  
+  # Number of spatial domains
+  n_domains: 10
+  
+  # Hierarchical clustering
+  hierarchical: false
+  n_levels: 1
+
+# Export settings
+export:
+  # Embedding format: parquet (recommended) or csv
+  embedding_format: "parquet"
+  
+  # Include sample_id in exports
+  include_sample_id: true
