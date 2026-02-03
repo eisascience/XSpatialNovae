@@ -343,8 +343,9 @@ elif page == "🔍 QC Filtering":
                 filter_criteria[col] = (min_val, max_val)
 
         if st.button("Apply Filters"):
-            if filter_criteria:
-                with st.spinner("Applying filters..."):
+            with st.spinner("Applying filters..."):
+                if filter_criteria:
+                    # Filters were selected - apply them
                     mask = qc.create_filter_mask(adata, filter_criteria)
                     st.session_state.qc_mask = mask
 
@@ -359,8 +360,20 @@ elif page == "🔍 QC Filtering":
                     # Create filtered copy
                     adata_filtered = adata[mask, :].copy()
                     st.session_state.adata_filtered = adata_filtered
-            else:
-                st.warning("No filters selected")
+                else:
+                    # No filters selected - use all cells
+                    mask = np.ones(adata.n_obs, dtype=bool)
+                    st.session_state.qc_mask = mask
+                    
+                    # Compute stats for no filtering
+                    stats = qc.compute_filter_stats(adata, mask)
+                    
+                    st.info(
+                        f"ℹ️ No QC filters applied; using all {stats['n_kept']} cells."
+                    )
+                    
+                    # Use full dataset (no need to copy)
+                    st.session_state.adata_filtered = adata
 
         # Visualize filtering
         if st.session_state.qc_mask is not None:
@@ -393,10 +406,17 @@ elif page == "🔍 QC Filtering":
 elif page == "🕸️ Spatial Neighbors":
     st.header("🕸️ Spatial Neighbor Graph")
 
-    if st.session_state.adata_filtered is None:
-        st.warning("Please apply QC filters first")
+    # Allow using either filtered or original data
+    if st.session_state.adata is None:
+        st.warning("Please load a dataset first")
     else:
-        adata = st.session_state.adata_filtered
+        # Use filtered data if available, otherwise use original
+        if st.session_state.adata_filtered is not None:
+            adata = st.session_state.adata_filtered
+            st.info(f"Using QC-filtered dataset with {adata.n_obs} cells")
+        else:
+            adata = st.session_state.adata
+            st.info(f"Using full dataset with {adata.n_obs} cells (no QC filtering applied)")
 
         st.subheader("Neighbor Parameters")
 
@@ -454,10 +474,15 @@ elif page == "🕸️ Spatial Neighbors":
 elif page == "🧠 Run Novae":
     st.header("🧠 Run Novae Model")
 
-    if st.session_state.adata_filtered is None:
-        st.warning("Please complete QC filtering and spatial neighbors first")
+    if st.session_state.adata is None:
+        st.warning("Please load a dataset first")
     else:
-        adata = st.session_state.adata_filtered
+        # Use filtered data if available, otherwise use original
+        if st.session_state.adata_filtered is not None:
+            adata = st.session_state.adata_filtered
+        else:
+            adata = st.session_state.adata
+            st.info("Using full dataset (no QC filtering applied)")
 
         st.subheader("Preprocessing")
 
@@ -480,7 +505,11 @@ elif page == "🧠 Run Novae":
                         n_comps=n_comps,
                         random_state=random_state,
                     )
-                    st.session_state.adata_filtered = adata
+                    # Update the appropriate session state
+                    if st.session_state.adata_filtered is not None:
+                        st.session_state.adata_filtered = adata
+                    else:
+                        st.session_state.adata = adata
                     st.session_state.preprocessing_done = True
                     st.success("Preprocessing complete!")
                 except Exception as e:
@@ -504,7 +533,11 @@ elif page == "🧠 Run Novae":
                             n_domains=n_domains,
                             random_state=random_state,
                         )
-                        st.session_state.adata_filtered = adata
+                        # Update the appropriate session state
+                        if st.session_state.adata_filtered is not None:
+                            st.session_state.adata_filtered = adata
+                        else:
+                            st.session_state.adata = adata
                         st.session_state.novae_done = True
                         st.success(
                             f"Novae complete! Assigned {adata.obs['domain'].nunique()} domains"
@@ -520,7 +553,8 @@ elif page == "📊 Results":
     if not st.session_state.novae_done:
         st.warning("Please run Novae first")
     else:
-        adata = st.session_state.adata_filtered
+        # Use whichever dataset has Novae results
+        adata = st.session_state.adata_filtered if st.session_state.adata_filtered is not None else st.session_state.adata
 
         # Visualization options
         st.subheader("Spatial Plots")
@@ -567,7 +601,8 @@ elif page == "💾 Export":
     if not st.session_state.novae_done:
         st.warning("Please run Novae first")
     else:
-        adata = st.session_state.adata_filtered
+        # Use whichever dataset has Novae results
+        adata = st.session_state.adata_filtered if st.session_state.adata_filtered is not None else st.session_state.adata
 
         st.subheader("Export Options")
 

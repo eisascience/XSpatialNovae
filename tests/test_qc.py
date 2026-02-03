@@ -127,6 +127,63 @@ class TestSummaries:
         assert stats["n_total"] == 100
         assert stats["n_kept"] + stats["n_filtered"] == 100
         assert 0 <= stats["percent_kept"] <= 100
+        # New keys
+        assert stats["total_cells"] == 100
+        assert stats["kept_cells"] + stats["removed_cells"] == 100
+        assert 0 <= stats["kept_fraction"] <= 1
+
+    def test_compute_filter_stats_all_true(self):
+        """Test compute_filter_stats with all True mask."""
+        adata = create_test_adata(n_obs=100)
+        mask = np.ones(100, dtype=bool)
+
+        stats = summaries.compute_filter_stats(adata, mask)
+
+        assert stats["kept_cells"] == 100
+        assert stats["removed_cells"] == 0
+        assert stats["kept_fraction"] == 1.0
+        assert stats["percent_kept"] == 100.0
+
+    def test_compute_filter_stats_all_false(self):
+        """Test compute_filter_stats with all False mask."""
+        adata = create_test_adata(n_obs=100)
+        mask = np.zeros(100, dtype=bool)
+
+        stats = summaries.compute_filter_stats(adata, mask)
+
+        assert stats["kept_cells"] == 0
+        assert stats["removed_cells"] == 100
+        assert stats["kept_fraction"] == 0.0
+        assert stats["percent_kept"] == 0.0
+
+    def test_compute_filter_stats_none_mask(self):
+        """Test compute_filter_stats with None mask (treats as all True)."""
+        adata = create_test_adata(n_obs=100)
+
+        stats = summaries.compute_filter_stats(adata, mask=None)
+
+        assert stats["kept_cells"] == 100
+        assert stats["removed_cells"] == 0
+        assert stats["kept_fraction"] == 1.0
+        assert stats["percent_kept"] == 100.0
+
+    def test_compute_filter_stats_with_sample_id(self):
+        """Test compute_filter_stats with sample_id grouping."""
+        adata = create_test_adata(n_obs=100)
+        mask = np.random.choice([True, False], size=100, p=[0.7, 0.3])
+
+        # Should auto-detect sample_id
+        stats = summaries.compute_filter_stats(adata, mask)
+
+        assert "by_group" in stats
+        assert "sample_1" in stats["by_group"]
+        assert "sample_2" in stats["by_group"]
+        
+        # Check per-sample stats
+        for sample in ["sample_1", "sample_2"]:
+            assert "n_total" in stats["by_group"][sample]
+            assert "n_kept" in stats["by_group"][sample]
+            assert "percent_kept" in stats["by_group"][sample]
 
     def test_identify_problematic_cells(self):
         """Test identifying problematic cells."""
