@@ -74,28 +74,148 @@ with st.sidebar:
 if page == "📁 Load Data":
     st.header("📁 Load Dataset")
 
-    uploaded_file = st.file_uploader("Upload H5AD file", type=["h5ad"])
+    st.markdown("""
+    Upload your spatial transcriptomics data in one of the following formats:
+    - **H5AD** (AnnData): Direct upload, ready for analysis
+    - **RDS** (Seurat): Will be converted to H5AD automatically
+    """)
+
+    uploaded_file = st.file_uploader("Upload file", type=["h5ad", "rds"])
 
     if uploaded_file is not None:
+        file_type = uploaded_file.name.split(".")[-1].lower()
+        
         # Save temporarily
         temp_path = Path("/tmp") / uploaded_file.name
         with open(temp_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
 
-        if st.button("Load Dataset"):
-            with st.spinner("Loading dataset..."):
-                try:
-                    adata = io.load_h5ad(str(temp_path))
-                    st.session_state.adata = adata
+        st.info(f"File uploaded: {uploaded_file.name} ({file_type.upper()} format)")
 
-                    # Detect mappings
-                    mappings = io.detect_mappings(adata)
-                    st.session_state.mappings = mappings
+        # Handle RDS conversion
+        if file_type == "rds":
+            st.divider()
+            st.subheader("Seurat Conversion Settings")
+            
+            # Check R availability first
+            r_available, r_msg = io.check_r_available()
+            
+            if not r_available:
+                st.error(f"❌ {r_msg}")
+                st.markdown("""
+                **To use .rds files, you need to install:**
+                1. R (version >= 4.2)
+                2. Required R packages:
+                   ```r
+                   install.packages(c("Seurat", "hdf5r", "optparse"))
+                   remotes::install_github("mojaveazure/seurat-disk")
+                   ```
+                """)
+                uploaded_file = None  # Reset to prevent further processing
+            else:
+                st.success(f"✓ {r_msg}")
+                
+                # Check R packages
+                packages_ok, packages_msg, missing = io.check_r_packages()
+                if not packages_ok:
+                    st.error(f"❌ Missing R packages")
+                    st.code(packages_msg)
+                    uploaded_file = None
+                else:
+                    st.success("✓ All required R packages installed")
+                    
+                    # Show conversion options
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        assay = st.text_input("Assay name", value="RNA", 
+                                             help="Seurat assay to extract")
+                        counts_slot = st.selectbox("Counts slot", 
+                                                  options=["counts", "data"],
+                                                  help="Which slot to use for count data")
+                    
+                    with col2:
+                        x_col = st.text_input("X coordinate column", value="auto",
+                                             help="Column name for x coordinates (auto to detect)")
+                        y_col = st.text_input("Y coordinate column", value="auto",
+                                             help="Column name for y coordinates (auto to detect)")
+                    
+                    sample_id_col = st.text_input("Sample ID column", value="auto",
+                                                 help="Column name for sample ID (auto to detect)")
+                    
+                    with st.expander("Advanced Options"):
+                        cell_id_col = st.text_input("Cell ID column (optional)", value="",
+                                                   help="Leave empty to use rownames")
+                        keep_meta_regex = st.text_input("Metadata filter regex (optional)", value="",
+                                                       help="Regex to filter metadata columns")
+                    
+                    # Store conversion params in session state
+                    if "rds_conversion_params" not in st.session_state:
+                        st.session_state.rds_conversion_params = {}
+                    
+                    st.session_state.rds_conversion_params = {
+                        "assay": assay,
+                        "counts_slot": counts_slot,
+                        "x_col": x_col,
+                        "y_col": y_col,
+                        "sample_id_col": sample_id_col,
+                        "cell_id_col": cell_id_col if cell_id_col else None,
+                        "keep_meta_regex": keep_meta_regex if keep_meta_regex else None,
+                    }
 
-                    st.success(f"Loaded {adata.n_obs} cells × {adata.n_vars} features")
+        # Load button
+        if uploaded_file is not None:
+            if st.button("Load Dataset", type="primary"):
+                with st.spinner("Loading dataset..."):
+                    try:
+                        if file_type == "rds":
+                            # Convert RDS to H5AD
+                            st.info("Converting Seurat .rds to H5AD format...")
+                            
+                            params = st.session_state.rds_conversion_params
+                            output_dir = Path("/tmp/conversions")
+                            
+                            output_path, adata, info = io.convert_rds_to_h5ad_with_validation(
+                                input_rds=str(temp_path),
+                                output_dir=str(output_dir),
+                                **params,
+                                use_cache=True,
+                                overwrite=False,
+                            )
+                            
+                            # Show conversion summary
+                            st.success("✓ Conversion complete!")
+                            
+                            with st.expander("Conversion Summary", expanded=True):
+                                col1, col2, col3 = st.columns(3)
+                                col1.metric("Cells", info["n_cells"])
+                                col2.metric("Features", info["n_features"])
+                                col3.metric("Assay", info["params"]["assay"])
+                                
+                                st.write("**Schema validation:**")
+                                st.write(f"- Spatial coordinates: {'✓' if info['has_spatial'] else '✗'}")
+                                st.write(f"- Cell IDs: {'✓' if info['has_cell_id'] else '✗'}")
+                                st.write(f"- Sample IDs: {'✓' if info['has_sample_id'] else '✗'}")
+                                
+                                if info["cached"]:
+                                    st.info("ℹ️ Used cached conversion from previous upload")
+                            
+                            st.session_state.adata = adata
+                            st.session_state.conversion_info = info
+                            
+                        else:
+                            # Load H5AD directly
+                            adata = io.load_h5ad(str(temp_path))
+                            st.session_state.adata = adata
+                            st.success(f"Loaded {adata.n_obs} cells × {adata.n_vars} features")
+                        
+                        # Detect mappings
+                        mappings = io.detect_mappings(st.session_state.adata)
+                        st.session_state.mappings = mappings
 
-                except Exception as e:
-                    st.error(f"Error loading file: {e}")
+                    except Exception as e:
+                        st.error(f"Error loading file: {e}")
+                        logger.exception("Error loading file")
 
     if st.session_state.adata is not None:
         st.divider()

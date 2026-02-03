@@ -254,5 +254,93 @@ def export_cmd(input_file, output_dir, embedding_format):
     click.echo(f"  manifest: {manifest_file}")
 
 
+@main.command()
+@click.argument("input_file", type=click.Path(exists=True))
+@click.option("--outdir", "-o", type=click.Path(), required=True, help="Output directory")
+@click.option("--assay", default="RNA", help="Seurat assay name [default: RNA]")
+@click.option("--x-col", default="auto", help="X coordinate column [default: auto-detect]")
+@click.option("--y-col", default="auto", help="Y coordinate column [default: auto-detect]")
+@click.option("--sample-id-col", default="auto", help="Sample ID column [default: auto-detect]")
+@click.option("--cell-id-col", default=None, help="Cell ID column [default: use rownames]")
+@click.option("--counts-slot", default="counts", type=click.Choice(["counts", "data"]), 
+              help="Seurat slot for counts [default: counts]")
+@click.option("--keep-meta-regex", default=None, help="Regex to filter metadata columns")
+@click.option("--overwrite", is_flag=True, help="Overwrite existing files")
+@click.option("--no-cache", is_flag=True, help="Disable caching of conversion")
+def convert(input_file, outdir, assay, x_col, y_col, sample_id_col, cell_id_col, 
+            counts_slot, keep_meta_regex, overwrite, no_cache):
+    """
+    Convert Seurat .rds file to H5AD format.
+
+    INPUT_FILE: Path to .rds file containing Seurat object
+    """
+    import json
+    
+    logger = logging.getLogger(__name__)
+    logger.info(f"Converting {input_file} to H5AD")
+    
+    # Check R availability
+    r_available, r_msg = io.check_r_available()
+    if not r_available:
+        click.echo(f"ERROR: {r_msg}", err=True)
+        click.echo("\nPlease install R (>=4.2) and required packages:")
+        click.echo("  R -e \"install.packages(c('Seurat', 'hdf5r', 'optparse'))\"")
+        click.echo("  R -e \"remotes::install_github('mojaveazure/seurat-disk')\"")
+        sys.exit(1)
+    
+    click.echo(f"✓ {r_msg}")
+    
+    # Check R packages
+    packages_ok, packages_msg, missing = io.check_r_packages()
+    if not packages_ok:
+        click.echo(f"ERROR: {packages_msg}", err=True)
+        sys.exit(1)
+    
+    click.echo("✓ All required R packages installed")
+    
+    # Run conversion
+    click.echo(f"\nConverting {input_file}...")
+    click.echo(f"  Assay: {assay}")
+    click.echo(f"  Counts slot: {counts_slot}")
+    click.echo(f"  Output directory: {outdir}")
+    
+    try:
+        output_path, adata, info = io.convert_rds_to_h5ad_with_validation(
+            input_rds=input_file,
+            output_dir=outdir,
+            assay=assay,
+            counts_slot=counts_slot,
+            x_col=x_col,
+            y_col=y_col,
+            sample_id_col=sample_id_col,
+            cell_id_col=cell_id_col,
+            keep_meta_regex=keep_meta_regex,
+            overwrite=overwrite,
+            use_cache=not no_cache,
+        )
+        
+        click.echo(f"\n✓ Conversion successful!")
+        click.echo(f"\n=== Conversion Summary ===")
+        click.echo(f"Output file: {output_path}")
+        click.echo(f"Cells: {info['n_cells']}")
+        click.echo(f"Features: {info['n_features']}")
+        click.echo(f"Cached: {info['cached']}")
+        click.echo(f"Spatial coords: {info['has_spatial']}")
+        click.echo(f"Cell ID: {info['has_cell_id']}")
+        click.echo(f"Sample ID: {info['has_sample_id']}")
+        
+        # Save manifest
+        manifest_path = Path(outdir) / "conversion_manifest.json"
+        with open(manifest_path, "w") as f:
+            json.dump(info, f, indent=2, default=str)
+        
+        click.echo(f"\nManifest saved to: {manifest_path}")
+        
+    except Exception as e:
+        click.echo(f"\nERROR: Conversion failed", err=True)
+        click.echo(str(e), err=True)
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     main()
