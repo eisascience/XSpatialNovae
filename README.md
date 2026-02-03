@@ -52,18 +52,192 @@ This toolkit bridges the gap between R/Seurat spatial analysis workflows and Pyt
 
 ## Installation
 
-### From source
+### Prerequisites
 
+**Python Version**: This package requires Python **3.11, 3.12, or 3.13**. Python 3.9 and 3.10 are no longer supported, and Python 3.14+ is not yet tested.
+
+Check your Python version:
 ```bash
-git clone https://github.com/eisascience/XSpatialNovae.git
-cd XSpatialNovae
-pip install -e .
+python --version
 ```
 
-### For development
+### Option A: Using uv (Recommended)
+
+[uv](https://github.com/astral-sh/uv) is a fast Python package and virtual environment manager, especially recommended for macOS Apple Silicon users.
+
+#### 1. Install uv
 
 ```bash
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Or with pip
+pip install uv
+```
+
+#### 2. Create Virtual Environment
+
+```bash
+# Clone the repository
+git clone https://github.com/eisascience/XSpatialNovae.git
+cd XSpatialNovae
+
+# Create a virtual environment with Python 3.11
+uv venv --python 3.11
+
+# Activate the environment
+source .venv/bin/activate  # macOS/Linux
+# or
+.venv\Scripts\activate     # Windows
+```
+
+#### 3. Install Dependencies
+
+```bash
+# Install core dependencies
+uv pip install -r requirements-uv.txt
+
+# Install the package in development mode
+uv pip install -e .
+
+# Optional: Install development tools
+uv pip install -e ".[dev]"
+
+# Optional: Install histology extras (see "Optional Histology Features" below)
+uv pip install -e ".[histology]"
+```
+
+### Option B: Using pip (Traditional)
+
+#### 1. Create Virtual Environment
+
+```bash
+# Clone the repository
+git clone https://github.com/eisascience/XSpatialNovae.git
+cd XSpatialNovae
+
+# Create virtual environment
+python3.11 -m venv venv
+
+# Activate the environment
+source venv/bin/activate  # macOS/Linux
+# or
+venv\Scripts\activate     # Windows
+```
+
+#### 2. Install Dependencies
+
+```bash
+# Install from requirements.txt
+pip install -r requirements.txt
+
+# Install the package
+pip install -e .
+
+# Optional: Install development dependencies
 pip install -e ".[dev]"
+
+# Optional: Install histology extras (see "Optional Histology Features" below)
+pip install -e ".[histology]"
+```
+
+### Optional Histology Features
+
+The histology/whole-slide image features (OpenSlide integration) are **completely optional** and only needed if you're working with H&E or other histology images. Most users working with spatial transcriptomics coordinates and expression matrices **do not need these**.
+
+#### When to Install Histology Dependencies
+
+Install histology extras if you need to:
+- Load and process whole-slide images (WSI)
+- Work with `.svs`, `.ndpi`, or other histology formats
+- Perform tissue segmentation or image-based analyses
+
+#### Platform-Specific Installation
+
+**macOS:**
+```bash
+# Install OpenSlide library via Homebrew
+brew install openslide
+
+# Install Python bindings
+pip install -r requirements-histology.txt
+# or
+pip install -e ".[histology]"
+```
+
+**Ubuntu/Debian:**
+```bash
+# Install OpenSlide library
+sudo apt-get update
+sudo apt-get install openslide-tools
+
+# Install Python bindings
+pip install -r requirements-histology.txt
+# or
+pip install -e ".[histology]"
+```
+
+**Windows:**
+1. Download OpenSlide binaries from https://openslide.org/download/
+2. Extract and add to PATH
+3. Install Python bindings:
+```bash
+pip install -r requirements-histology.txt
+# or
+pip install -e ".[histology]"
+```
+
+**Note**: If you don't need histology features, you can safely skip this entire section. The core Novae workflow for spatial transcriptomics works without OpenSlide.
+
+### Download Models / Assets
+
+Novae model weights are hosted on [Hugging Face](https://huggingface.co/MICS-Lab) and may be downloaded automatically when first used. However, for **offline/cluster environments** or to avoid delays during first run, you can prefetch and cache them.
+
+#### Automatic Download (Online Use)
+
+Models will be downloaded automatically on first use and cached in:
+- `~/.cache/huggingface/hub` (default)
+- Or the location specified by `HF_HOME`, `TRANSFORMERS_CACHE`, or `HUGGINGFACE_HUB_CACHE` environment variables
+
+#### Manual Prefetch (Recommended for Offline/Cluster)
+
+```bash
+# Download default Novae model (novae-human-0)
+python scripts/download_models.py
+
+# Download a specific model version
+python scripts/download_models.py --novae-model-id MICS-Lab/novae-human-1
+
+# Use a custom cache directory
+python scripts/download_models.py --cache-dir /scratch/models
+
+# For offline use, set the cache location before running the app
+export HF_HOME=/path/to/cache
+streamlit run app.py
+```
+
+The script will print the cache location and provide instructions for configuring your environment to use the cached models.
+
+**Available Models:**
+- `MICS-Lab/novae-human-0` - Default pretrained model for human tissue
+- `MICS-Lab/novae-human-1` - Alternative/updated version (check Hugging Face for availability)
+
+**Note**: If you encounter network issues or "model not found" errors, ensure you have:
+1. An active internet connection
+2. Access to Hugging Face Hub (no firewall blocking)
+3. Run `python scripts/download_models.py` to prefetch models
+
+### Verify Installation
+
+```bash
+# Check package is installed
+python -c "import novae_seurat_gui; print('✓ Package installed successfully')"
+
+# Run tests (optional)
+pytest
+
+# Start the GUI
+streamlit run app.py
 ```
 
 ## Quick Start

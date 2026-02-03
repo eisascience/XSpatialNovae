@@ -1,11 +1,70 @@
 # Quick Reference Guide
 
+## Prerequisites
+
+**Python Version**: Requires Python **3.11, 3.12, or 3.13**
+
+```bash
+python --version  # Should be 3.11.x, 3.12.x, or 3.13.x
+```
+
 ## Installation
+
+### Quick Install (uv - Recommended)
+
+```bash
+# Install uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Clone and setup
+git clone https://github.com/eisascience/XSpatialNovae.git
+cd XSpatialNovae
+
+# Create environment and install
+uv venv --python 3.11
+source .venv/bin/activate
+uv pip install -r requirements-uv.txt
+uv pip install -e .
+```
+
+### Quick Install (pip - Traditional)
 
 ```bash
 git clone https://github.com/eisascience/XSpatialNovae.git
 cd XSpatialNovae
+
+# Create environment and install
+python3.11 -m venv venv
+source venv/bin/activate  # or `venv\Scripts\activate` on Windows
+pip install -r requirements.txt
 pip install -e .
+```
+
+### Download Models (Optional but Recommended)
+
+```bash
+# Prefetch Novae model weights for offline use
+python scripts/download_models.py
+
+# Or for a specific model
+python scripts/download_models.py --novae-model-id MICS-Lab/novae-human-0
+```
+
+### Optional: Histology Features
+
+**Only needed for whole-slide image analysis. Skip if you're just using spatial coordinates + expression matrices.**
+
+```bash
+# macOS
+brew install openslide
+pip install -r requirements-histology.txt
+
+# Ubuntu/Debian
+sudo apt-get install openslide-tools
+pip install -r requirements-histology.txt
+
+# Windows: Download from https://openslide.org/download/ and add to PATH
+pip install -r requirements-histology.txt
 ```
 
 ## Usage
