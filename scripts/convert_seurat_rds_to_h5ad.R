@@ -8,6 +8,10 @@
 #   - optparse
 
 suppressPackageStartupMessages({
+  if (!requireNamespace("optparse", quietly = TRUE)) {
+    stop("Error: optparse package is required but not installed.\n",
+         "Install with: R -e \"install.packages('optparse')\"")
+  }
   library(optparse)
 })
 
@@ -32,7 +36,9 @@ option_list <- list(
   make_option(c("--keep_meta_regex"), type = "character", default = NULL,
               help = "Regex pattern to filter metadata columns to keep", metavar = "REGEX"),
   make_option(c("--overwrite"), type = "logical", default = FALSE,
-              help = "Overwrite existing output files [default: %default]")
+              help = "Overwrite existing output files [default: %default]"),
+  make_option(c("--verbose"), type = "logical", default = FALSE,
+              help = "Print verbose output including session info [default: %default]")
 )
 
 opt_parser <- OptionParser(option_list = option_list,
@@ -62,7 +68,13 @@ cat("=== Seurat RDS to H5AD Conversion ===\n")
 cat("Input RDS:", opt$input_rds, "\n")
 cat("Output H5AD:", opt$output_h5ad, "\n")
 cat("Assay:", opt$assay, "\n")
-cat("Counts slot:", opt$counts_slot, "\n\n")
+cat("Counts slot:", opt$counts_slot, "\n")
+
+if (opt$verbose) {
+  cat("\n=== Session Info ===\n")
+  print(sessionInfo())
+  cat("\n")
+}
 
 # Load required libraries
 cat("Loading required libraries...\n")
@@ -81,6 +93,79 @@ suppressPackageStartupMessages({
   library(SeuratDisk)
   library(hdf5r)
 })
+
+# Detect SeuratObject version for compatibility
+seurat_obj_version <- try(packageVersion("SeuratObject"), silent = TRUE)
+is_seurat_v5 <- FALSE
+if (!inherits(seurat_obj_version, "try-error")) {
+  is_seurat_v5 <- seurat_obj_version >= "5.0.0"
+  if (opt$verbose) {
+    cat("SeuratObject version:", as.character(seurat_obj_version), 
+        ifelse(is_seurat_v5, "(v5 layer-based)", "(v4 slot-based)"), "\n")
+  }
+}
+
+# Helper function to safely extract data from Seurat assay (v4/v5 compatible)
+get_assay_data <- function(object, assay_name, layer_or_slot = "counts") {
+  assay_obj <- object[[assay_name]]
+  
+  if (is_seurat_v5) {
+    # SeuratObject v5: Use layer-based access
+    if (inherits(assay_obj, "Assay5")) {
+      # Get available layers
+      available_layers <- Layers(assay_obj)
+      
+      if (opt$verbose) {
+        cat("  Assay5 detected. Available layers:", paste(available_layers, collapse = ", "), "\n")
+      }
+      
+      # Try to get the requested layer
+      if (layer_or_slot == "data") {
+        layer_name <- paste0("data.", DefaultLayer(assay_obj))
+      } else {
+        layer_name <- paste0("counts.", DefaultLayer(assay_obj))
+      }
+      
+      # Check various layer naming patterns
+      if (layer_or_slot %in% available_layers) {
+        data <- LayerData(assay_obj, layer = layer_or_slot)
+      } else if (layer_name %in% available_layers) {
+        data <- LayerData(assay_obj, layer = layer_name)
+      } else if (length(available_layers) > 0) {
+        # Fall back to first available layer with appropriate prefix
+        matching_layers <- grep(paste0("^", layer_or_slot), available_layers, value = TRUE)
+        if (length(matching_layers) > 0) {
+          data <- LayerData(assay_obj, layer = matching_layers[1])
+          warning("Using layer '", matching_layers[1], "' as '", layer_or_slot, "' not found")
+        } else {
+          # Use default layer
+          default_layer <- DefaultLayer(assay_obj)
+          data <- LayerData(assay_obj, layer = paste0(layer_or_slot, ".", default_layer))
+        }
+      } else {
+        stop("No layers available in Assay5 object")
+      }
+    } else {
+      # Legacy Assay in v5
+      data <- GetAssayData(assay_obj, layer = layer_or_slot)
+    }
+  } else {
+    # SeuratObject v4 or earlier: Use slot-based access
+    data <- GetAssayData(assay_obj, slot = layer_or_slot)
+  }
+  
+  return(data)
+}
+
+# Helper function to check if data exists
+has_assay_data <- function(object, assay_name, layer_or_slot = "counts") {
+  tryCatch({
+    data <- get_assay_data(object, assay_name, layer_or_slot)
+    return(!is.null(data) && length(data) > 0)
+  }, error = function(e) {
+    return(FALSE)
+  })
+}
 
 # Load Seurat object
 cat("Loading Seurat object...\n")
@@ -105,17 +190,15 @@ if (!(opt$assay %in% available_assays)) {
 DefaultAssay(seurat_obj) <- opt$assay
 cat("Using assay:", opt$assay, "\n")
 
-# Check counts slot
-assay_obj <- seurat_obj[[opt$assay]]
-has_counts <- !is.null(GetAssayData(assay_obj, slot = "counts")) && 
-              length(GetAssayData(assay_obj, slot = "counts")) > 0
+# Check counts slot using version-compatible helper
+has_counts <- has_assay_data(seurat_obj, opt$assay, "counts")
 
 if (opt$counts_slot == "counts" && !has_counts) {
-  warning("Counts slot is empty or NULL. Falling back to 'data' slot.")
+  warning("Counts data is empty or not available. Falling back to 'data' slot/layer.")
   opt$counts_slot <- "data"
 }
 
-cat("Using counts slot:", opt$counts_slot, "\n")
+cat("Using counts slot/layer:", opt$counts_slot, "\n")
 
 # Filter metadata columns if regex is provided
 if (!is.null(opt$keep_meta_regex)) {

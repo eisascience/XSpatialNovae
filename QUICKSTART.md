@@ -67,6 +67,39 @@ pip install -r requirements-histology.txt
 pip install -r requirements-histology.txt
 ```
 
+### Optional: R Dependencies for .rds Upload
+
+**Only needed if you want to upload Seurat .rds files directly. Skip if you're using H5AD files.**
+
+#### Install R (>= 4.2)
+```bash
+# macOS
+brew install r
+
+# Ubuntu/Debian
+sudo apt-get install r-base r-base-dev
+
+# Windows: Download from https://cran.r-project.org/
+```
+
+#### Install Required R Packages
+```bash
+# Run from terminal
+Rscript -e "install.packages(c('optparse', 'Seurat', 'hdf5r'))"
+Rscript -e "if (!requireNamespace('remotes', quietly = TRUE)) install.packages('remotes'); remotes::install_github('mojaveazure/seurat-disk')"
+```
+
+#### Verify R Installation
+```bash
+# Basic verification (optparse, Seurat, hdf5r)
+Rscript -e "library(Seurat); library(hdf5r); library(optparse); cat('✓ Core packages ready\n')"
+
+# Full verification (including SeuratDisk)
+Rscript -e "library(Seurat); library(SeuratDisk); library(hdf5r); library(optparse); cat('✓ All R packages ready\n')"
+```
+
+**Note:** This tool supports both SeuratObject v4 (slot-based) and v5 (layer-based) automatically.
+
 ## Usage
 
 ### 1. Streamlit GUI (Recommended for Interactive Use)
@@ -296,6 +329,54 @@ seurat_obj[["novae"]] <- novae_dr
 # Visualize
 DimPlot(seurat_obj, reduction = "novae", group.by = "domain_level_0")
 ```
+
+## Troubleshooting
+
+### .rds Upload Issues
+
+**R not found:**
+```bash
+# Install R
+brew install r  # macOS
+sudo apt-get install r-base  # Ubuntu
+```
+
+**Missing R packages:**
+```bash
+Rscript -e "install.packages(c('optparse', 'Seurat', 'hdf5r'))"
+Rscript -e "remotes::install_github('mojaveazure/seurat-disk')"
+```
+
+**SeuratObject v5 "slot defunct" error:**
+- This tool automatically supports v4 and v5
+- Ensure you're using the latest version
+- Use `--verbose` flag to debug
+
+**Coordinate detection fails:**
+```bash
+# Specify manually
+novae-seurat-gui convert data.rds --outdir ./out \
+  --x-col "x_slide_mm" --y-col "y_slide_mm"
+```
+
+### Other Issues
+
+**Import errors:**
+```bash
+pip install -e .
+```
+
+**Streamlit blank page:**
+```bash
+streamlit run app.py --server.port 8502
+```
+
+**Model not found:**
+```bash
+python scripts/download_models.py
+```
+
+For detailed troubleshooting, see [README.md](README.md#troubleshooting)
 
 ## Testing
 
