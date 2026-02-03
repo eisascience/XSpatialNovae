@@ -543,7 +543,14 @@ elif page == "🧠 Run Novae":
                             f"Novae complete! Assigned {adata.obs['domain'].nunique()} domains"
                         )
                     except Exception as e:
-                        st.error(f"Error: {e}")
+                        # Check if it's a dependency error
+                        from novae_seurat_gui.utils.deps import MissingDependency
+                        if isinstance(e, MissingDependency):
+                            st.error("❌ Missing Required Dependencies")
+                            st.code(str(e), language="text")
+                        else:
+                            st.error(f"Error: {e}")
+                            logger.exception("Error running Novae")
 
 
 # ==================== Results Page ====================

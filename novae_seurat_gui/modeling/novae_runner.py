@@ -9,6 +9,8 @@ import anndata
 import numpy as np
 import scanpy as sc
 
+from ..utils.deps import require_package, MissingDependency
+
 logger = logging.getLogger(__name__)
 
 
@@ -205,6 +207,14 @@ def run_novae_zeroshot(
 
     # Placeholder: Use UMAP + Leiden clustering as a proxy
     logger.info(f"Running Novae zero-shot with model {model_name}")
+
+    # Check dependencies for leiden clustering
+    try:
+        require_package("igraph", pip_package="python-igraph")
+        require_package("leidenalg", pip_package="leidenalg")
+    except MissingDependency as e:
+        logger.error(str(e))
+        raise
 
     # Ensure PCA is computed
     if "X_pca" not in adata.obsm:
