@@ -199,6 +199,11 @@ if page == "📁 Load Data":
                                 
                                 if info["cached"]:
                                     st.info("ℹ️ Used cached conversion from previous upload")
+                                
+                                # Show R script output if available
+                                if not info["cached"] and "r_stdout" in info:
+                                    with st.expander("🔍 Conversion Log", expanded=False):
+                                        st.code(info["r_stdout"], language="text")
                             
                             st.session_state.adata = adata
                             st.session_state.conversion_info = info
