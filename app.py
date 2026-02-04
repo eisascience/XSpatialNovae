@@ -317,14 +317,14 @@ elif page == "🔍 QC Filtering":
         # Get numeric columns
         numeric_cols = adata.obs.select_dtypes(include=[np.number]).columns.tolist()
 
-        # Filter selection
+        # Filter selection - reactive (no apply button needed)
         filter_criteria = {}
 
         for col in numeric_cols[:6]:  # Show top 6 numeric columns
             col1, col2, col3 = st.columns([2, 1, 1])
 
             with col1:
-                use_filter = st.checkbox(f"Filter by {col}", value=False)
+                use_filter = st.checkbox(f"Filter by {col}", value=False, key=f"use_filter_{col}")
 
             if use_filter:
                 with col2:
@@ -342,64 +342,58 @@ elif page == "🔍 QC Filtering":
 
                 filter_criteria[col] = (min_val, max_val)
 
-        if st.button("Apply Filters"):
-            with st.spinner("Applying filters..."):
-                if filter_criteria:
-                    # Filters were selected - apply them
-                    mask = qc.create_filter_mask(adata, filter_criteria)
-                    st.session_state.qc_mask = mask
+        # Add reset button
+        if st.button("Reset Filters"):
+            # Clear all filter-related session state keys
+            for col in numeric_cols[:6]:
+                for key in [f"use_filter_{col}", f"min_{col}", f"max_{col}"]:
+                    if key in st.session_state:
+                        del st.session_state[key]
+            st.rerun()
 
-                    # Compute stats
-                    stats = qc.compute_filter_stats(adata, mask)
+        # Build mask reactively (no apply button)
+        # Compute mask directly without caching (streamlit caches renders automatically)
+        mask = qc.build_filter_mask(adata, filter_criteria)
+        
+        # Store in session state
+        st.session_state.qc_mask = mask
+        
+        # Create filtered adata
+        if np.all(mask):
+            # No filtering - use original
+            adata_current = adata
+        else:
+            # Some filtering - create copy
+            adata_current = adata[mask, :].copy()
+        
+        st.session_state.adata_filtered = adata_current
 
-                    st.success(
-                        f"Filters applied: {stats['n_kept']} cells kept "
-                        f"({stats['percent_kept']:.1f}%)"
-                    )
+        # Always show filtering results and spatial plot
+        st.divider()
+        st.subheader("Filtering Results")
 
-                    # Create filtered copy
-                    adata_filtered = adata[mask, :].copy()
-                    st.session_state.adata_filtered = adata_filtered
-                else:
-                    # No filters selected - use all cells
-                    mask = np.ones(adata.n_obs, dtype=bool)
-                    st.session_state.qc_mask = mask
-                    
-                    # Compute stats for no filtering
-                    stats = qc.compute_filter_stats(adata, mask)
-                    
-                    st.info(
-                        f"ℹ️ No QC filters applied; using all {stats['n_kept']} cells."
-                    )
-                    
-                    # Use full dataset (no need to copy)
-                    st.session_state.adata_filtered = adata
+        # Compute stats
+        stats = qc.compute_filter_stats(adata, mask)
 
-        # Visualize filtering
-        if st.session_state.qc_mask is not None:
-            st.divider()
-            st.subheader("Filtering Results")
+        # Stats panel - always visible
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Kept", stats['n_kept'])
+        col2.metric("Filtered", stats['n_filtered'])
+        col3.metric("% Kept", f"{stats['percent_kept']:.1f}%")
 
-            mask = st.session_state.qc_mask
+        if stats['n_filtered'] == 0:
+            st.info("ℹ️ No filters applied; showing all cells.")
+        else:
+            st.success(f"✓ Filters applied: {stats['n_kept']} cells kept ({stats['percent_kept']:.1f}%)")
 
-            # Stats
-            col1, col2, col3 = st.columns(3)
-            n_kept = np.sum(mask)
-            n_filtered = np.sum(~mask)
-            total = len(mask)
-
-            col1.metric("Kept", n_kept)
-            col2.metric("Filtered", n_filtered)
-            col3.metric("% Kept", f"{100 * n_kept / total:.1f}%")
-
-            # Spatial plot
-            st.subheader("Spatial Distribution")
-            if "spatial" in adata.obsm or (
-                st.session_state.mappings.get("x_col")
-                and st.session_state.mappings.get("y_col")
-            ):
-                fig = viz.plot_qc_spatial(adata, mask)
-                st.plotly_chart(fig, use_container_width=True)
+        # Spatial plot - always show
+        st.subheader("Spatial Distribution")
+        if "spatial" in adata.obsm or (
+            st.session_state.mappings.get("x_col")
+            and st.session_state.mappings.get("y_col")
+        ):
+            fig = viz.plot_qc_spatial(adata, mask)
+            st.plotly_chart(fig, use_container_width=True)
 
 
 # ==================== Spatial Neighbors Page ====================
@@ -543,7 +537,14 @@ elif page == "🧠 Run Novae":
                             f"Novae complete! Assigned {adata.obs['domain'].nunique()} domains"
                         )
                     except Exception as e:
-                        st.error(f"Error: {e}")
+                        # Check if it's a dependency error
+                        from novae_seurat_gui.utils.deps import MissingDependency
+                        if isinstance(e, MissingDependency):
+                            st.error("❌ Missing Required Dependencies")
+                            st.code(str(e), language="text")
+                        else:
+                            st.error(f"Error: {e}")
+                            logger.exception("Error running Novae")
 
 
 # ==================== Results Page ====================

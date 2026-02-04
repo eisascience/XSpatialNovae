@@ -22,9 +22,13 @@ def plot_spatial_scatter(
     color_map: Optional[str] = None,
     width: int = 800,
     height: int = 600,
+    scale_with_zoom: bool = True,
 ) -> go.Figure:
     """
     Create spatial scatter plot colored by metadata or expression.
+    
+    When scale_with_zoom=True, markers are sized in data coordinates so they
+    scale proportionally when zooming in/out.
 
     Parameters
     ----------
@@ -35,7 +39,8 @@ def plot_spatial_scatter(
     spatial_key : str
         Key in adata.obsm for spatial coordinates.
     size : float
-        Marker size.
+        Marker size. When scale_with_zoom=True, this is interpreted as a
+        fraction of the data range (default 3). When False, it's pixels.
     opacity : float
         Marker opacity.
     title : str, optional
@@ -46,11 +51,14 @@ def plot_spatial_scatter(
         Figure width in pixels.
     height : int
         Figure height in pixels.
+    scale_with_zoom : bool
+        If True, markers scale in data coordinates (grow/shrink with zoom).
+        If False, markers stay constant pixel size. Default is True.
 
     Returns
     -------
     plotly.graph_objects.Figure
-        Plotly figure object.
+        Plotly figure object with zoom-responsive marker sizing.
     """
     if spatial_key not in adata.obsm:
         raise ValueError(f"Spatial key '{spatial_key}' not found in adata.obsm")
@@ -93,16 +101,51 @@ def plot_spatial_scatter(
             title=title or f"Spatial: {color_by}" if color_by else "Spatial",
         )
 
-    # Update layout
-    fig.update_traces(marker=dict(size=size))
+    # Configure marker sizing
+    if scale_with_zoom:
+        # Scale markers in data coordinates so they grow/shrink with zoom
+        # Calculate appropriate size based on data range
+        x_range = float(x.max() - x.min())
+        y_range = float(y.max() - y.min())
+        avg_range = (x_range + y_range) / 2
+        
+        # Marker size as fraction of data range
+        # Empirical scaling factor: 300 gives good default visibility
+        # (approximately 3-5 pixel markers for typical coordinate ranges)
+        MARKER_SCALE_FACTOR = 300.0
+        marker_size_data = avg_range * (size / MARKER_SCALE_FACTOR)
+        
+        # Use sizemode='diameter' (not 'area') so size value directly
+        # corresponds to marker diameter in data units
+        fig.update_traces(
+            marker=dict(
+                size=marker_size_data,
+                sizemode='diameter',
+                sizeref=1,  # Size is in data coordinates
+            )
+        )
+    else:
+        # Use pixel-based sizing (Plotly default)
+        fig.update_traces(marker=dict(size=size))
+    
     fig.update_layout(
         width=width,
         height=height,
         xaxis_title="X",
         yaxis_title="Y",
         plot_bgcolor="white",
-        xaxis=dict(showgrid=True, gridcolor="lightgray"),
-        yaxis=dict(showgrid=True, gridcolor="lightgray", scaleanchor="x", scaleratio=1),
+        xaxis=dict(
+            showgrid=True, 
+            gridcolor="lightgray",
+        ),
+        yaxis=dict(
+            showgrid=True, 
+            gridcolor="lightgray", 
+            scaleanchor="x", 
+            scaleratio=1,
+        ),
+        # Enable drag mode for zoom/pan
+        dragmode='zoom',
     )
 
     return fig
@@ -117,9 +160,12 @@ def plot_qc_spatial(
     title: str = "QC Filtering: Kept vs. Filtered",
     width: int = 800,
     height: int = 600,
+    scale_with_zoom: bool = True,
 ) -> go.Figure:
     """
     Plot spatial coordinates colored by QC pass/fail.
+    
+    When scale_with_zoom=True, markers scale proportionally with zoom.
 
     Parameters
     ----------
@@ -139,11 +185,14 @@ def plot_qc_spatial(
         Figure width in pixels.
     height : int
         Figure height in pixels.
+    scale_with_zoom : bool
+        If True, markers scale in data coordinates (grow/shrink with zoom).
+        Default is True.
 
     Returns
     -------
     plotly.graph_objects.Figure
-        Plotly figure object.
+        Plotly figure object with zoom-responsive marker sizing.
     """
     if spatial_key not in adata.obsm:
         raise ValueError(f"Spatial key '{spatial_key}' not found in adata.obsm")
@@ -167,7 +216,27 @@ def plot_qc_spatial(
         category_orders={"QC Status": ["Kept", "Filtered"]},
     )
 
-    fig.update_traces(marker=dict(size=size))
+    # Configure marker sizing
+    if scale_with_zoom:
+        # Scale markers in data coordinates
+        x_range = float(x.max() - x.min())
+        y_range = float(y.max() - y.min())
+        avg_range = (x_range + y_range) / 2
+        
+        # Empirical scaling factor for good default visibility
+        MARKER_SCALE_FACTOR = 300.0
+        marker_size_data = avg_range * (size / MARKER_SCALE_FACTOR)
+        
+        fig.update_traces(
+            marker=dict(
+                size=marker_size_data,
+                sizemode='diameter',
+                sizeref=1,
+            )
+        )
+    else:
+        fig.update_traces(marker=dict(size=size))
+    
     fig.update_layout(
         width=width,
         height=height,
@@ -176,6 +245,7 @@ def plot_qc_spatial(
         plot_bgcolor="white",
         xaxis=dict(showgrid=True, gridcolor="lightgray"),
         yaxis=dict(showgrid=True, gridcolor="lightgray", scaleanchor="x", scaleratio=1),
+        dragmode='zoom',
     )
 
     return fig
