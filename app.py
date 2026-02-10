@@ -641,12 +641,13 @@ elif page == "🔬 Domains & Markers":
         st.divider()
         st.subheader("2. Grouped Summary")
         
+        # Detect sample column (used as default for cross-tabulation)
+        sample_col = cluster_interpretation.utils.get_sample_column(adata)
+        
         # Add column selectors in two columns
         col1, col2 = st.columns(2)
         
         with col1:
-            # Detect sample column
-            sample_col = cluster_interpretation.utils.get_sample_column(adata)
             st.caption("Primary grouping column selected above")
         
         with col2:
