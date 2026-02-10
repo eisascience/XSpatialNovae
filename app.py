@@ -11,7 +11,7 @@ import streamlit as st
 # Add package to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from novae_seurat_gui import io, qc, spatial, modeling, viz, export
+from novae_seurat_gui import io, qc, spatial, modeling, viz, export, cluster_interpretation
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -57,6 +57,7 @@ with st.sidebar:
             "🕸️ Spatial Neighbors",
             "🧠 Run Novae",
             "📊 Results",
+            "🔬 Domains & Markers",
             "💾 Export",
         ],
     )
@@ -593,6 +594,264 @@ elif page == "📊 Results":
                     columns={"index": "Domain", "domain": "Cell Count"}
                 )
             )
+
+
+# ==================== Domains & Markers Page ====================
+elif page == "🔬 Domains & Markers":
+    st.header("🔬 Domains & Markers")
+    
+    if st.session_state.adata is None:
+        st.warning("Please load a dataset first")
+    else:
+        # Use filtered data if available, otherwise use original
+        if st.session_state.adata_filtered is not None:
+            adata = st.session_state.adata_filtered
+        else:
+            adata = st.session_state.adata
+        
+        st.markdown("""
+        Explore your discovered groups: understand what each cluster/domain is, 
+        where it sits in tissue, and what genes/metadata define it.
+        """)
+        
+        # ========== 1. Label/Grouping Selector ==========
+        st.subheader("1. Select Label Column")
+        
+        candidate_cols = cluster_interpretation.get_candidate_label_columns(adata)
+        
+        if len(candidate_cols) == 0:
+            st.error("No columns found in adata.obs. Please check your dataset.")
+            st.stop()
+        
+        label_col = st.selectbox(
+            "Choose a grouping/label column",
+            options=candidate_cols,
+            help="Select a column containing cluster, domain, or cell type labels",
+        )
+        
+        # Check for too many unique values
+        n_unique = adata.obs[label_col].nunique()
+        if n_unique > 200:
+            st.warning(f"⚠️ Column '{label_col}' has {n_unique} unique values. This may be slow.")
+        
+        # Exclude NA option
+        exclude_na = st.checkbox("Exclude NA/missing values", value=True)
+        
+        # ========== 2. Cluster Summary Table ==========
+        st.divider()
+        st.subheader("2. Cluster Summary")
+        
+        # Detect sample column
+        sample_col = cluster_interpretation.utils.get_sample_column(adata)
+        
+        # Compute summary (with caching)
+        @st.cache_data(show_spinner=False)
+        def get_cluster_summary(_adata, _label_col, _sample_col, _exclude_na):
+            return cluster_interpretation.compute_cluster_summary(
+                _adata, _label_col, sample_col=_sample_col, exclude_na=_exclude_na
+            )
+        
+        summary_df = get_cluster_summary(adata, label_col, sample_col, exclude_na)
+        
+        if len(summary_df) == 0:
+            st.warning("No groups found in the selected column.")
+            st.stop()
+        
+        st.dataframe(summary_df, use_container_width=True)
+        
+        # Group selection (using dropdown for simplicity)
+        st.subheader("3. Select Group to Analyze")
+        
+        group_options = summary_df["group_id"].astype(str).tolist()
+        selected_group = st.selectbox(
+            "Select a group/cluster",
+            options=group_options,
+            help="Choose a specific group to analyze in detail",
+        )
+        
+        # Convert back to original type
+        original_type = adata.obs[label_col].dtype
+        if pd.api.types.is_numeric_dtype(original_type):
+            try:
+                selected_group = type(adata.obs[label_col].iloc[0])(selected_group)
+            except:
+                pass
+        
+        st.info(f"Analyzing group: **{selected_group}**")
+        
+        # ========== 3. Spatial Visualization ==========
+        st.divider()
+        st.subheader("4. Where in Tissue")
+        
+        # Check if spatial coordinates exist
+        has_spatial, spatial_msg = cluster_interpretation.utils.check_spatial_coords(adata)
+        
+        if not has_spatial:
+            st.warning(f"⚠️ {spatial_msg}")
+            st.info("Spatial visualization is not available. Continuing with marker analysis...")
+        else:
+            st.success(f"✓ {spatial_msg}")
+            
+            # Sample/FOV filter (if applicable)
+            if sample_col:
+                samples = adata.obs[sample_col].unique().tolist()
+                if len(samples) > 1:
+                    selected_samples = st.multiselect(
+                        "Filter by sample/FOV (optional)",
+                        options=samples,
+                        default=samples,
+                        help="Select which samples to display",
+                    )
+                    
+                    # Filter adata for visualization
+                    if len(selected_samples) < len(samples):
+                        sample_mask = adata.obs[sample_col].isin(selected_samples)
+                        adata_viz = adata[sample_mask, :].copy()
+                    else:
+                        adata_viz = adata
+                else:
+                    adata_viz = adata
+            else:
+                adata_viz = adata
+            
+            # Create spatial plot
+            try:
+                fig_spatial = cluster_interpretation.plot_spatial_highlight(
+                    adata_viz,
+                    label_col=label_col,
+                    group_id=selected_group,
+                    spatial_key="spatial",
+                    size=3,
+                )
+                st.plotly_chart(fig_spatial, use_container_width=True)
+            except Exception as e:
+                st.error(f"Error creating spatial plot: {e}")
+        
+        # ========== 4. Marker Genes ==========
+        st.divider()
+        st.subheader("5. What Defines It: Marker Genes")
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            n_genes = st.number_input("Number of top genes", value=25, min_value=5, max_value=200)
+        with col2:
+            normalize = st.checkbox("Apply log1p normalization", value=True)
+        
+        # Compute marker genes (with caching)
+        @st.cache_data(show_spinner=False)
+        def get_marker_genes(_adata, _label_col, _group_id, _n_genes, _normalize):
+            return cluster_interpretation.compute_marker_genes(
+                _adata,
+                label_col=_label_col,
+                group_id=_group_id,
+                n_genes=_n_genes,
+                normalize=_normalize,
+            )
+        
+        with st.spinner("Computing marker genes..."):
+            try:
+                markers_df = get_marker_genes(adata, label_col, selected_group, n_genes, normalize)
+                
+                if len(markers_df) == 0:
+                    st.warning("No significant marker genes found for this group.")
+                else:
+                    st.success(f"Found {len(markers_df)} marker genes")
+                    
+                    # Display table
+                    st.dataframe(markers_df, use_container_width=True)
+                    
+                    # Download button
+                    csv = markers_df.to_csv(index=False)
+                    st.download_button(
+                        label="Download Marker Genes (CSV)",
+                        data=csv,
+                        file_name=f"markers_{label_col}_{selected_group}.csv",
+                        mime="text/csv",
+                    )
+                    
+                    # Store in adata.uns for export
+                    if "xspatialnovae_markers" not in adata.uns:
+                        adata.uns["xspatialnovae_markers"] = {}
+                    if label_col not in adata.uns["xspatialnovae_markers"]:
+                        adata.uns["xspatialnovae_markers"][label_col] = {}
+                    
+                    # Convert to dict for serialization
+                    adata.uns["xspatialnovae_markers"][label_col][str(selected_group)] = markers_df.to_dict(orient="records")
+                    
+                    st.info("✓ Marker genes stored in adata.uns['xspatialnovae_markers']")
+            
+            except Exception as e:
+                st.error(f"Error computing marker genes: {e}")
+                logger.exception("Error computing marker genes")
+        
+        # ========== 5. Metadata Enrichment ==========
+        st.divider()
+        st.subheader("6. Metadata Enrichment")
+        
+        # Cell type composition
+        celltype_col = cluster_interpretation.utils.get_celltype_column(adata)
+        
+        if celltype_col:
+            st.markdown("**Cell Type Composition**")
+            
+            try:
+                composition_df = cluster_interpretation.summaries.compute_group_composition(
+                    adata, label_col, selected_group, celltype_col
+                )
+                
+                if len(composition_df) > 0:
+                    col1, col2 = st.columns([1, 1])
+                    
+                    with col1:
+                        st.dataframe(composition_df, use_container_width=True)
+                    
+                    with col2:
+                        fig_comp = cluster_interpretation.plot_celltype_composition(
+                            composition_df,
+                            title=f"Cell Types in {selected_group}",
+                        )
+                        st.plotly_chart(fig_comp, use_container_width=True)
+                else:
+                    st.info("No cell type data available for this group.")
+            
+            except Exception as e:
+                st.warning(f"Could not compute cell type composition: {e}")
+        else:
+            st.info("No cell type column detected. Skipping cell type composition.")
+        
+        # QC metrics comparison
+        st.markdown("**QC Metrics Comparison**")
+        
+        qc_cols = cluster_interpretation.utils.get_qc_columns(adata)
+        
+        if len(qc_cols) > 0:
+            try:
+                qc_comparison_df = cluster_interpretation.summaries.compare_qc_metrics(
+                    adata, label_col, selected_group, qc_cols
+                )
+                
+                if len(qc_comparison_df) > 0:
+                    display_df = cluster_interpretation.create_qc_comparison_table(qc_comparison_df)
+                    st.dataframe(display_df, use_container_width=True)
+                else:
+                    st.info("No QC metrics available for comparison.")
+            
+            except Exception as e:
+                st.warning(f"Could not compute QC comparison: {e}")
+        else:
+            st.info("No QC metric columns detected.")
+        
+        # Store cluster summary in adata.uns
+        if "xspatialnovae_cluster_summary" not in adata.uns:
+            adata.uns["xspatialnovae_cluster_summary"] = {}
+        
+        adata.uns["xspatialnovae_cluster_summary"][label_col] = summary_df.to_dict(orient="records")
+        
+        # Update session state to save changes
+        if st.session_state.adata_filtered is not None:
+            st.session_state.adata_filtered = adata
+        else:
+            st.session_state.adata = adata
 
 
 # ==================== Export Page ====================

@@ -13,6 +13,6 @@ This package provides tools to:
 __version__ = "0.1.0"
 __author__ = "EISA Science"
 
-from . import io, qc, spatial, modeling, viz, export
+from . import io, qc, spatial, modeling, viz, export, cluster_interpretation
 
-__all__ = ["io", "qc", "spatial", "modeling", "viz", "export", "__version__"]
+__all__ = ["io", "qc", "spatial", "modeling", "viz", "export", "cluster_interpretation", "__version__"]
