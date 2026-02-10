@@ -657,7 +657,7 @@ elif page == "🔬 Domains & Markers":
             
             # Set default index based on celltype column
             default_idx = 0
-            if celltype_col_default and celltype_col_default in candidate_cols:
+            if celltype_col_default and celltype_col_default in comparison_options:
                 default_idx = comparison_options.index(celltype_col_default)
             
             comparison_col = st.selectbox(

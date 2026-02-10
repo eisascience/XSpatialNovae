@@ -29,15 +29,20 @@ def get_candidate_label_columns(adata: anndata.AnnData) -> List[str]:
     keywords = ["domain", "cluster", "leiden", "louvain", "cell_type"]
     
     # Find columns matching each keyword in priority order
+    # Use set for O(1) membership checks
     priority_cols = []
+    priority_set = set()
+    
     for keyword in keywords:
         for col in adata.obs.columns:
-            col_lower = col.lower()
-            if keyword in col_lower and col not in priority_cols:
-                priority_cols.append(col)
+            if col not in priority_set:
+                col_lower = col.lower()
+                if keyword in col_lower:
+                    priority_cols.append(col)
+                    priority_set.add(col)
     
     # Get all other columns (excluding priority ones)
-    all_cols = [col for col in adata.obs.columns if col not in priority_cols]
+    all_cols = [col for col in adata.obs.columns if col not in priority_set]
     
     # Return priority columns first, then all others
     return priority_cols + all_cols
