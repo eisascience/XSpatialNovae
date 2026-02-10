@@ -11,6 +11,9 @@ import plotly.express as px
 
 logger = logging.getLogger(__name__)
 
+# Constants for numerical stability
+MIN_PVALUE_FOR_LOG = 1e-300  # Minimum p-value for log transformation to avoid log(0)
+
 
 def plot_spatial_highlight(
     adata: anndata.AnnData,
@@ -308,7 +311,7 @@ def plot_marker_genes_volcano(
     
     # Prepare data
     plot_data = markers_df.copy()
-    plot_data["-log10(p)"] = -np.log10(plot_data["p_value"] + 1e-300)  # Add small constant to avoid log(0)
+    plot_data["-log10(p)"] = -np.log10(plot_data["p_value"] + MIN_PVALUE_FOR_LOG)
     
     # Create scatter plot
     fig = px.scatter(

@@ -740,8 +740,6 @@ elif page == "🔬 Domains & Markers":
         # Compute marker genes (with caching)
         @st.cache_data(show_spinner=False)
         def get_marker_genes(_adata, _label_col, _group_id, _n_genes, _normalize):
-            # Create a hash from adata for caching
-            adata_hash = f"{_adata.n_obs}_{_adata.n_vars}_{_label_col}_{_group_id}"
             return cluster_interpretation.compute_marker_genes(
                 _adata,
                 label_col=_label_col,

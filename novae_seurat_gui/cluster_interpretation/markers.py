@@ -11,6 +11,9 @@ from scipy.sparse import issparse
 
 logger = logging.getLogger(__name__)
 
+# Constants for numerical stability
+EPSILON_FOR_LOG = 1e-9  # Small constant to avoid log(0)
+
 
 def compute_marker_genes(
     adata: anndata.AnnData,
@@ -97,7 +100,7 @@ def compute_marker_genes(
         mean_diffs[i] = mean_in - mean_out
         
         # Log fold change (add small constant to avoid log(0))
-        log_fcs[i] = np.log2((mean_in + 1e-9) / (mean_out + 1e-9))
+        log_fcs[i] = np.log2((mean_in + EPSILON_FOR_LOG) / (mean_out + EPSILON_FOR_LOG))
         
         # Compute percentage of cells expressing (>0)
         pct_in[i] = (gene_in > 0).sum() / n_in * 100
@@ -212,7 +215,7 @@ def compute_fold_change(
     if hasattr(mean_out, "A1"):
         mean_out = mean_out.A1
     
-    log_fcs = np.log2((mean_in + 1e-9) / (mean_out + 1e-9))
+    log_fcs = np.log2((mean_in + EPSILON_FOR_LOG) / (mean_out + EPSILON_FOR_LOG))
     
     results = pd.DataFrame({
         "gene": adata.var_names.tolist(),
