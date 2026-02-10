@@ -14,7 +14,7 @@ def get_candidate_label_columns(adata: anndata.AnnData) -> List[str]:
     """
     Get candidate label/grouping columns from adata.obs.
     
-    Prioritizes columns containing keywords: domain, cluster, leiden, louvain, cell_type.
+    Prioritizes columns containing keywords: domain (first), then cluster, leiden, louvain, cell_type.
     
     Parameters
     ----------
@@ -24,19 +24,17 @@ def get_candidate_label_columns(adata: anndata.AnnData) -> List[str]:
     Returns
     -------
     list of str
-        List of candidate column names, with prioritized ones first.
+        List of candidate column names, with prioritized ones first (domain highest priority).
     """
     keywords = ["domain", "cluster", "leiden", "louvain", "cell_type"]
     
-    # Find columns matching keywords
+    # Find columns matching each keyword in priority order
     priority_cols = []
-    for col in adata.obs.columns:
-        col_lower = col.lower()
-        if any(kw in col_lower for kw in keywords):
-            priority_cols.append(col)
-    
-    # Remove duplicates while preserving order
-    priority_cols = list(dict.fromkeys(priority_cols))
+    for keyword in keywords:
+        for col in adata.obs.columns:
+            col_lower = col.lower()
+            if keyword in col_lower and col not in priority_cols:
+                priority_cols.append(col)
     
     # Get all other columns (excluding priority ones)
     all_cols = [col for col in adata.obs.columns if col not in priority_cols]

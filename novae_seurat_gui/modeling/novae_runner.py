@@ -186,6 +186,9 @@ def run_novae_zeroshot(
     ValueError
         If the model cannot be loaded or downloaded.
     """
+    # NOTE: This warning is intentional placeholder behavior
+    # It alerts users that this is a fallback implementation using UMAP
+    # Install the 'novae' package to use the actual Novae model
     logger.warning(
         "Novae integration is a placeholder. Install 'novae' package for full functionality."
     )
@@ -250,7 +253,7 @@ def run_novae_zeroshot(
 
     # Leiden clustering for domain assignment
     logger.info(f"Assigning {n_domains} spatial domains (Leiden clustering)")
-    sc.tl.leiden(adata, resolution=1.0, n_iterations=2, random_state=random_state)
+    sc.tl.leiden(adata, resolution=1.0, flavor="igraph", n_iterations=2, directed=False, random_state=random_state)
 
     # Rename to domain
     adata.obs["domain"] = adata.obs["leiden"].astype(str)
