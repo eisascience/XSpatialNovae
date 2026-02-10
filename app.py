@@ -637,12 +637,39 @@ elif page == "🔬 Domains & Markers":
         # Exclude NA option
         exclude_na = st.checkbox("Exclude NA/missing values", value=True)
         
-        # ========== 2. Cluster Summary Table ==========
+        # ========== 2. Grouped Summary Table ==========
         st.divider()
-        st.subheader("2. Cluster Summary")
+        st.subheader("2. Grouped Summary")
         
-        # Detect sample column
+        # Detect sample column (used as default for cross-tabulation)
         sample_col = cluster_interpretation.utils.get_sample_column(adata)
+        
+        # Add column selectors in two columns
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.caption("Primary grouping column selected above")
+        
+        with col2:
+            # Add comparison column selector
+            celltype_col_default = cluster_interpretation.utils.get_celltype_column(adata)
+            comparison_options = ["None"] + candidate_cols
+            
+            # Set default index based on celltype column
+            default_idx = 0
+            if celltype_col_default and celltype_col_default in comparison_options:
+                default_idx = comparison_options.index(celltype_col_default)
+            
+            comparison_col = st.selectbox(
+                "Compare against column (optional)",
+                options=comparison_options,
+                index=default_idx,
+                help="Create cross-tabulation with this column"
+            )
+            
+            # Set to None if "None" selected
+            if comparison_col == "None":
+                comparison_col = None
         
         # Compute summary (with caching)
         @st.cache_data(show_spinner=False)
@@ -651,7 +678,9 @@ elif page == "🔬 Domains & Markers":
                 _adata, _label_col, sample_col=_sample_col, exclude_na=_exclude_na
             )
         
-        summary_df = get_cluster_summary(adata, label_col, sample_col, exclude_na)
+        # Use comparison_col if selected, otherwise use sample_col
+        crosstab_col = comparison_col if comparison_col else sample_col
+        summary_df = get_cluster_summary(adata, label_col, crosstab_col, exclude_na)
         
         if len(summary_df) == 0:
             st.warning("No groups found in the selected column.")
@@ -666,6 +695,7 @@ elif page == "🔬 Domains & Markers":
         selected_group = st.selectbox(
             "Select a group/cluster",
             options=group_options,
+            index=0,  # Default to first group
             help="Choose a specific group to analyze in detail",
         )
         
@@ -794,28 +824,34 @@ elif page == "🔬 Domains & Markers":
         if celltype_col:
             st.markdown("**Cell Type Composition**")
             
-            try:
-                composition_df = cluster_interpretation.summaries.compute_group_composition(
-                    adata, label_col, selected_group, celltype_col
-                )
+            # Validate columns exist
+            if label_col not in adata.obs.columns:
+                st.error(f"Label column '{label_col}' not found in data")
+            elif celltype_col not in adata.obs.columns:
+                st.error(f"Cell type column '{celltype_col}' not found in data")
+            else:
+                try:
+                    composition_df = cluster_interpretation.summaries.compute_group_composition(
+                        adata, label_col, selected_group, celltype_col
+                    )
+                    
+                    if len(composition_df) > 0:
+                        col1, col2 = st.columns([1, 1])
+                        
+                        with col1:
+                            st.dataframe(composition_df, use_container_width=True)
+                        
+                        with col2:
+                            fig_comp = cluster_interpretation.plot_celltype_composition(
+                                composition_df,
+                                title=f"Cell Types in {selected_group}",
+                            )
+                            st.plotly_chart(fig_comp, use_container_width=True)
+                    else:
+                        st.info("No cell type data available for this group.")
                 
-                if len(composition_df) > 0:
-                    col1, col2 = st.columns([1, 1])
-                    
-                    with col1:
-                        st.dataframe(composition_df, use_container_width=True)
-                    
-                    with col2:
-                        fig_comp = cluster_interpretation.plot_celltype_composition(
-                            composition_df,
-                            title=f"Cell Types in {selected_group}",
-                        )
-                        st.plotly_chart(fig_comp, use_container_width=True)
-                else:
-                    st.info("No cell type data available for this group.")
-            
-            except Exception as e:
-                st.warning(f"Could not compute cell type composition: {e}")
+                except Exception as e:
+                    st.warning(f"Could not compute cell type composition: {e}")
         else:
             st.info("No cell type column detected. Skipping cell type composition.")
         
