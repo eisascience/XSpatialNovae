@@ -225,3 +225,126 @@ def compute_fold_change(
     })
     
     return results.sort_values("logFC", ascending=False)
+
+
+def compute_domain_weights(
+    adata: anndata.AnnData,
+    label_col: str,
+    group_id: str,
+    n_top: int = 20,
+    use_layer: Optional[str] = None,
+    store_in_uns: bool = True,
+) -> pd.DataFrame:
+    """
+    Compute proxy gene weights that drive a domain/cluster assignment.
+
+    When the real Novae package is not available this uses log2 fold change
+    (group vs. rest) as a proxy weight.  Both positive and negative
+    contributors are returned so the caller can display top positive, top
+    negative and top absolute drivers.
+
+    Results are cached in ``adata.uns['xspatialnovae_domain_weights']`` for
+    reproducibility and fast repeated access.
+
+    Parameters
+    ----------
+    adata : anndata.AnnData
+        Input AnnData object.
+    label_col : str
+        Column in ``adata.obs`` containing domain/cluster labels.
+    group_id : str
+        Specific domain/cluster to explain.
+    n_top : int
+        Number of top genes to return per direction.  The returned table
+        contains at most ``2 * n_top`` rows (top positive + top negative by
+        ``logFC``).
+    use_layer : str, optional
+        Layer to use for expression data.  Defaults to ``adata.X``.
+    store_in_uns : bool
+        If True, save the full ranked list in
+        ``adata.uns['xspatialnovae_domain_weights'][label_col][str(group_id)]``.
+
+    Returns
+    -------
+    pd.DataFrame
+        DataFrame sorted by absolute ``logFC`` descending, with columns:
+        ``gene``, ``logFC``, ``mean_in``, ``mean_out``, ``direction``
+        (``"positive"`` | ``"negative"``).
+    """
+    if label_col not in adata.obs.columns:
+        raise ValueError(f"Label column '{label_col}' not found in adata.obs")
+
+    from .utils import prepare_expression_data
+
+    expr = prepare_expression_data(adata, use_layer=use_layer, normalize=True)
+
+    group_mask = (adata.obs[label_col] == group_id).values
+    other_mask = (adata.obs[label_col] != group_id) & (~adata.obs[label_col].isna())
+
+    n_in = int(group_mask.sum())
+    n_out = int(other_mask.sum())
+
+    if n_in == 0:
+        raise ValueError(f"Group '{group_id}' has no cells")
+    if n_out == 0:
+        raise ValueError("No cells in 'other' group for comparison")
+
+    logger.info(
+        "Computing domain weights for %s: %d cells vs %d other cells",
+        group_id,
+        n_in,
+        n_out,
+    )
+
+    expr_in = expr[group_mask, :]
+    expr_out = expr[other_mask, :]
+
+    mean_in = np.asarray(expr_in.mean(axis=0)).ravel()
+    mean_out = np.asarray(expr_out.mean(axis=0)).ravel()
+
+    log_fcs = np.log2((mean_in + EPSILON_FOR_LOG) / (mean_out + EPSILON_FOR_LOG))
+
+    all_results = pd.DataFrame(
+        {
+            "gene": adata.var_names.tolist(),
+            "logFC": log_fcs,
+            "mean_in": mean_in,
+            "mean_out": mean_out,
+        }
+    )
+    all_results["direction"] = np.where(all_results["logFC"] >= 0, "positive", "negative")
+
+    # Persist full list before subsetting
+    if store_in_uns:
+        if "xspatialnovae_domain_weights" not in adata.uns:
+            adata.uns["xspatialnovae_domain_weights"] = {}
+        if label_col not in adata.uns["xspatialnovae_domain_weights"]:
+            adata.uns["xspatialnovae_domain_weights"][label_col] = {}
+        adata.uns["xspatialnovae_domain_weights"][label_col][str(group_id)] = (
+            all_results.to_dict(orient="records")
+        )
+
+    # Return top positive + top negative sorted by absolute logFC
+    top_pos = (
+        all_results[all_results["logFC"] >= 0]
+        .sort_values("logFC", ascending=False)
+        .head(n_top)
+    )
+    top_neg = (
+        all_results[all_results["logFC"] < 0]
+        .sort_values("logFC", ascending=True)
+        .head(n_top)
+    )
+
+    combined = pd.concat([top_pos, top_neg], ignore_index=True)
+    combined = combined.sort_values("logFC", key=np.abs, ascending=False).reset_index(drop=True)
+
+    logger.info(
+        "Domain weights for %s: %d positive, %d negative drivers returned",
+        group_id,
+        len(top_pos),
+        len(top_neg),
+    )
+
+    return combined
+

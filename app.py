@@ -11,7 +11,7 @@ import streamlit as st
 # Add package to path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from novae_seurat_gui import io, qc, spatial, modeling, viz, export, cluster_interpretation
+from novae_seurat_gui import io, qc, modeling, viz, export, cluster_interpretation
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -20,7 +20,6 @@ logger = logging.getLogger(__name__)
 # Page config
 st.set_page_config(
     page_title="Novae-Seurat GUI",
-    page_icon="🧬",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -41,7 +40,7 @@ if "novae_done" not in st.session_state:
 
 
 # Title
-st.title("🧬 Novae-Seurat GUI")
+st.title("Novae-Seurat GUI")
 st.markdown(
     "Python-first workflow for Novae spatial foundation model on Seurat objects"
 )
@@ -52,13 +51,12 @@ with st.sidebar:
     page = st.radio(
         "Select Page",
         [
-            "📁 Load Data",
-            "🔍 QC Filtering",
-            "🕸️ Spatial Neighbors",
-            "🧠 Run Novae",
-            "📊 Results",
-            "🔬 Domains & Markers",
-            "💾 Export",
+            "Load Data",
+            "QC Filtering",
+            "Run Novae",
+            "Results",
+            "Domains & Markers",
+            "Export",
         ],
     )
 
@@ -72,8 +70,8 @@ with st.sidebar:
 
 
 # ==================== Load Data Page ====================
-if page == "📁 Load Data":
-    st.header("📁 Load Dataset")
+if page == "Load Data":
+    st.header("Load Dataset")
 
     st.markdown("""
     Upload your spatial transcriptomics data in one of the following formats:
@@ -102,7 +100,7 @@ if page == "📁 Load Data":
             r_available, r_msg = io.check_r_available()
             
             if not r_available:
-                st.error(f"❌ {r_msg}")
+                st.error(r_msg)
                 st.markdown("""
                 **To use .rds files, you need to install:**
                 1. R (version >= 4.2)
@@ -114,16 +112,16 @@ if page == "📁 Load Data":
                 """)
                 uploaded_file = None  # Reset to prevent further processing
             else:
-                st.success(f"✓ {r_msg}")
+                st.success(r_msg)
                 
                 # Check R packages
                 packages_ok, packages_msg, missing = io.check_r_packages()
                 if not packages_ok:
-                    st.error(f"❌ Missing R packages")
+                    st.error("Missing R packages")
                     st.code(packages_msg)
                     uploaded_file = None
                 else:
-                    st.success("✓ All required R packages installed")
+                    st.success("All required R packages installed")
                     
                     # Show conversion options
                     col1, col2 = st.columns(2)
@@ -194,16 +192,16 @@ if page == "📁 Load Data":
                                 col3.metric("Assay", info["params"]["assay"])
                                 
                                 st.write("**Schema validation:**")
-                                st.write(f"- Spatial coordinates: {'✓' if info['has_spatial'] else '✗'}")
-                                st.write(f"- Cell IDs: {'✓' if info['has_cell_id'] else '✗'}")
-                                st.write(f"- Sample IDs: {'✓' if info['has_sample_id'] else '✗'}")
+                                st.write(f"- Spatial coordinates: {'yes' if info['has_spatial'] else 'no'}")
+                                st.write(f"- Cell IDs: {'yes' if info['has_cell_id'] else 'no'}")
+                                st.write(f"- Sample IDs: {'yes' if info['has_sample_id'] else 'no'}")
                                 
                                 if info["cached"]:
-                                    st.info("ℹ️ Used cached conversion from previous upload")
+                                    st.info("Used cached conversion from previous upload")
                                 
                                 # Show R script output if available
                                 if not info["cached"] and "r_stdout" in info:
-                                    with st.expander("🔍 Conversion Log", expanded=False):
+                                    with st.expander("Conversion Log", expanded=False):
                                         st.code(info["r_stdout"], language="text")
                             
                             st.session_state.adata = adata
@@ -305,8 +303,8 @@ if page == "📁 Load Data":
 
 
 # ==================== QC Filtering Page ====================
-elif page == "🔍 QC Filtering":
-    st.header("🔍 Quality Control Filtering")
+elif page == "QC Filtering":
+    st.header("Quality Control Filtering")
 
     if st.session_state.adata is None:
         st.warning("Please load a dataset first")
@@ -343,30 +341,114 @@ elif page == "🔍 QC Filtering":
 
                 filter_criteria[col] = (min_val, max_val)
 
+        # ------ Spatial coordinate filters ------
+        st.divider()
+        st.subheader("Spatial Coordinate Filters")
+        st.caption(
+            "Optionally restrict cells to an X/Y bounding box to remove "
+            "surrounding whitespace or tissue edges."
+        )
+
+        # Detect spatial coordinates
+        _has_spatial = "spatial" in adata.obsm
+        _has_xy_obs = "x" in adata.obs.columns and "y" in adata.obs.columns
+
+        if _has_spatial or _has_xy_obs:
+            if _has_spatial:
+                _sx = adata.obsm["spatial"][:, 0]
+                _sy = adata.obsm["spatial"][:, 1]
+            else:
+                _sx = adata.obs["x"].values.astype(float)
+                _sy = adata.obs["y"].values.astype(float)
+
+            _x_data_min = float(np.nanmin(_sx))
+            _x_data_max = float(np.nanmax(_sx))
+            _y_data_min = float(np.nanmin(_sy))
+            _y_data_max = float(np.nanmax(_sy))
+
+            use_coord_filter = st.checkbox(
+                "Apply spatial bounding-box filter", value=False, key="use_coord_filter"
+            )
+
+            _coord_x_min = None
+            _coord_x_max = None
+            _coord_y_min = None
+            _coord_y_max = None
+
+            if use_coord_filter:
+                c1, c2, c3, c4 = st.columns(4)
+                with c1:
+                    _coord_x_min = st.number_input(
+                        "X min",
+                        value=_x_data_min,
+                        key="coord_x_min",
+                    )
+                with c2:
+                    _coord_x_max = st.number_input(
+                        "X max",
+                        value=_x_data_max,
+                        key="coord_x_max",
+                    )
+                with c3:
+                    _coord_y_min = st.number_input(
+                        "Y min",
+                        value=_y_data_min,
+                        key="coord_y_min",
+                    )
+                with c4:
+                    _coord_y_max = st.number_input(
+                        "Y max",
+                        value=_y_data_max,
+                        key="coord_y_max",
+                    )
+        else:
+            st.info(
+                "No spatial coordinates found (adata.obsm['spatial'] or obs columns 'x'/'y'). "
+                "Spatial bounding-box filter is disabled."
+            )
+            use_coord_filter = False
+            _coord_x_min = _coord_x_max = _coord_y_min = _coord_y_max = None
+
         # Add reset button
         if st.button("Reset Filters"):
-            # Clear all filter-related session state keys
+            keys_to_clear = []
             for col in numeric_cols[:6]:
-                for key in [f"use_filter_{col}", f"min_{col}", f"max_{col}"]:
-                    if key in st.session_state:
-                        del st.session_state[key]
+                keys_to_clear += [f"use_filter_{col}", f"min_{col}", f"max_{col}"]
+            keys_to_clear += [
+                "use_coord_filter", "coord_x_min", "coord_x_max",
+                "coord_y_min", "coord_y_max",
+            ]
+            for key in keys_to_clear:
+                if key in st.session_state:
+                    del st.session_state[key]
             st.rerun()
 
-        # Build mask reactively (no apply button)
-        # Compute mask directly without caching (streamlit caches renders automatically)
+        # Build metadata mask reactively
         mask = qc.build_filter_mask(adata, filter_criteria)
-        
+
+        # Apply spatial coordinate mask if requested
+        if use_coord_filter and (_has_spatial or _has_xy_obs):
+            try:
+                coord_mask = qc.create_coordinate_mask(
+                    adata,
+                    x_min=_coord_x_min,
+                    x_max=_coord_x_max,
+                    y_min=_coord_y_min,
+                    y_max=_coord_y_max,
+                )
+                mask = mask & coord_mask
+            except Exception as _e:
+                st.error(f"Error applying coordinate filter: {_e}")
+
         # Store in session state
         st.session_state.qc_mask = mask
-        
+
         # Create filtered adata
         if np.all(mask):
-            # No filtering - use original
             adata_current = adata
         else:
-            # Some filtering - create copy
             adata_current = adata[mask, :].copy()
-        
+
         st.session_state.adata_filtered = adata_current
 
         # Always show filtering results and spatial plot
@@ -383,91 +465,32 @@ elif page == "🔍 QC Filtering":
         col3.metric("% Kept", f"{stats['percent_kept']:.1f}%")
 
         if stats['n_filtered'] == 0:
-            st.info("ℹ️ No filters applied; showing all cells.")
+            st.info("No filters applied; showing all cells.")
         else:
-            st.success(f"✓ Filters applied: {stats['n_kept']} cells kept ({stats['percent_kept']:.1f}%)")
+            st.success(f"Filters applied: {stats['n_kept']} cells kept ({stats['percent_kept']:.1f}%)")
 
         # Spatial plot - always show
         st.subheader("Spatial Distribution")
-        if "spatial" in adata.obsm or (
+
+        # Point size slider for spatial plots
+        _pt_size = st.slider("Point size", min_value=1, max_value=20, value=4, key="qc_point_size")
+
+        if "spatial" in adata.obsm:
+            fig = viz.plot_qc_spatial(adata, mask, size=_pt_size)
+            st.plotly_chart(fig, use_container_width=True)
+        elif (
             st.session_state.mappings.get("x_col")
             and st.session_state.mappings.get("y_col")
         ):
-            fig = viz.plot_qc_spatial(adata, mask)
-            st.plotly_chart(fig, use_container_width=True)
-
-
-# ==================== Spatial Neighbors Page ====================
-elif page == "🕸️ Spatial Neighbors":
-    st.header("🕸️ Spatial Neighbor Graph")
-
-    # Allow using either filtered or original data
-    if st.session_state.adata is None:
-        st.warning("Please load a dataset first")
-    else:
-        # Use filtered data if available, otherwise use original
-        if st.session_state.adata_filtered is not None:
-            adata = st.session_state.adata_filtered
-            st.info(f"Using QC-filtered dataset with {adata.n_obs} cells")
-        else:
-            adata = st.session_state.adata
-            st.info(f"Using full dataset with {adata.n_obs} cells (no QC filtering applied)")
-
-        st.subheader("Neighbor Parameters")
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-            method = st.radio("Method", ["Radius", "K-Nearest Neighbors"])
-
-        with col2:
-            if method == "Radius":
-                radius = st.number_input("Radius", value=150.0, min_value=1.0)
-                n_neighbors = None
-            else:
-                n_neighbors = st.number_input("K", value=15, min_value=1)
-                radius = None
-
-        if st.button("Build Neighbor Graph"):
-            with st.spinner("Building spatial neighbor graph..."):
-                try:
-                    if radius:
-                        adata = spatial.compute_neighbors(
-                            adata, method="radius", radius=radius
-                        )
-                    else:
-                        adata = spatial.compute_neighbors(
-                            adata, method="knn", n_neighbors=n_neighbors
-                        )
-
-                    st.session_state.adata_filtered = adata
-                    st.success("Neighbor graph built!")
-
-                except Exception as e:
-                    st.error(f"Error: {e}")
-
-        # Show diagnostics
-        if "spatial_connectivities" in adata.obsp:
-            st.divider()
-            st.subheader("Graph Diagnostics")
-
-            diag = spatial.graph_diagnostics(adata)
-
-            col1, col2, col3, col4 = st.columns(4)
-            col1.metric("Edges", diag["n_edges"])
-            col2.metric("Avg Degree", f"{diag['degree']['mean']:.1f}")
-            col3.metric("Components", diag["connected_components"]["n_components"])
-            col4.metric("Isolated Cells", diag["connected_components"]["isolated_cells"])
-
-            # Degree distribution
-            st.subheader("Degree Distribution")
-            fig = spatial.plot_degree_distribution(adata)
-            st.pyplot(fig)
+            st.info(
+                "Spatial coordinates found in obs columns but not in obsm['spatial']. "
+                "Apply mappings on the Load Data page to enable the spatial plot."
+            )
 
 
 # ==================== Run Novae Page ====================
-elif page == "🧠 Run Novae":
-    st.header("🧠 Run Novae Model")
+elif page == "Run Novae":
+    st.header("Run Novae Model")
 
     if st.session_state.adata is None:
         st.warning("Please load a dataset first")
@@ -478,6 +501,18 @@ elif page == "🧠 Run Novae":
         else:
             adata = st.session_state.adata
             st.info("Using full dataset (no QC filtering applied)")
+
+        # Show mode information (novae availability)
+        from novae_seurat_gui.modeling.novae_runner import _NOVAE_AVAILABLE
+        if _NOVAE_AVAILABLE:
+            st.success("Novae package detected. Running in full Novae mode.")
+        else:
+            st.info(
+                "The optional 'novae' package is not installed. "
+                "Running in proxy mode: UMAP + Leiden clustering will be used "
+                "as a substitute for the Novae foundation model. "
+                "Install 'novae' for the real model."
+            )
 
         st.subheader("Preprocessing")
 
@@ -541,7 +576,7 @@ elif page == "🧠 Run Novae":
                         # Check if it's a dependency error
                         from novae_seurat_gui.utils.deps import MissingDependency
                         if isinstance(e, MissingDependency):
-                            st.error("❌ Missing Required Dependencies")
+                            st.error("Missing Required Dependencies")
                             st.code(str(e), language="text")
                         else:
                             st.error(f"Error: {e}")
@@ -549,8 +584,8 @@ elif page == "🧠 Run Novae":
 
 
 # ==================== Results Page ====================
-elif page == "📊 Results":
-    st.header("📊 Results Visualization")
+elif page == "Results":
+    st.header("Results Visualization")
 
     if not st.session_state.novae_done:
         st.warning("Please run Novae first")
@@ -567,7 +602,9 @@ elif page == "📊 Results":
             index=0,
         )
 
-        fig = viz.plot_spatial_scatter(adata, color_by=color_by, size=2)
+        _pt_size_results = st.slider("Point size", min_value=1, max_value=20, value=4, key="results_point_size")
+
+        fig = viz.plot_spatial_scatter(adata, color_by=color_by, size=_pt_size_results)
         st.plotly_chart(fig, use_container_width=True)
 
         st.divider()
@@ -597,8 +634,8 @@ elif page == "📊 Results":
 
 
 # ==================== Domains & Markers Page ====================
-elif page == "🔬 Domains & Markers":
-    st.header("🔬 Domains & Markers")
+elif page == "Domains & Markers":
+    st.header("Domains & Markers")
     
     if st.session_state.adata is None:
         st.warning("Please load a dataset first")
@@ -609,10 +646,10 @@ elif page == "🔬 Domains & Markers":
         else:
             adata = st.session_state.adata
         
-        st.markdown("""
-        Explore your discovered groups: understand what each cluster/domain is, 
-        where it sits in tissue, and what genes/metadata define it.
-        """)
+        st.markdown(
+            "Explore your discovered groups: understand what each cluster/domain is, "
+            "where it sits in tissue, and what genes/metadata define it."
+        )
         
         # ========== 1. Label/Grouping Selector ==========
         st.subheader("1. Select Label Column")
@@ -632,7 +669,7 @@ elif page == "🔬 Domains & Markers":
         # Check for too many unique values
         n_unique = adata.obs[label_col].nunique()
         if n_unique > 200:
-            st.warning(f"⚠️ Column '{label_col}' has {n_unique} unique values. This may be slow.")
+            st.warning(f"Column '{label_col}' has {n_unique} unique values. This may be slow.")
         
         # Exclude NA option
         exclude_na = st.checkbox("Exclude NA/missing values", value=True)
@@ -695,7 +732,7 @@ elif page == "🔬 Domains & Markers":
         selected_group = st.selectbox(
             "Select a group/cluster",
             options=group_options,
-            index=0,  # Default to first group
+            index=0,
             help="Choose a specific group to analyze in detail",
         )
         
@@ -704,8 +741,12 @@ elif page == "🔬 Domains & Markers":
         if pd.api.types.is_numeric_dtype(original_type):
             try:
                 selected_group = type(adata.obs[label_col].iloc[0])(selected_group)
-            except:
-                pass
+            except (ValueError, TypeError):
+                logger.debug(
+                    "Could not coerce selected group '%s' to dtype %s; keeping as string.",
+                    selected_group,
+                    original_type,
+                )
         
         st.info(f"Analyzing group: **{selected_group}**")
         
@@ -717,10 +758,10 @@ elif page == "🔬 Domains & Markers":
         has_spatial, spatial_msg = cluster_interpretation.utils.check_spatial_coords(adata)
         
         if not has_spatial:
-            st.warning(f"⚠️ {spatial_msg}")
+            st.warning(spatial_msg)
             st.info("Spatial visualization is not available. Continuing with marker analysis...")
         else:
-            st.success(f"✓ {spatial_msg}")
+            st.success(spatial_msg)
             
             # Sample/FOV filter (if applicable)
             if sample_col:
@@ -805,18 +846,77 @@ elif page == "🔬 Domains & Markers":
                     if label_col not in adata.uns["xspatialnovae_markers"]:
                         adata.uns["xspatialnovae_markers"][label_col] = {}
                     
-                    # Convert to dict for serialization
                     adata.uns["xspatialnovae_markers"][label_col][str(selected_group)] = markers_df.to_dict(orient="records")
                     
-                    st.info("✓ Marker genes stored in adata.uns['xspatialnovae_markers']")
+                    st.info("Marker genes stored in adata.uns['xspatialnovae_markers']")
             
             except Exception as e:
                 st.error(f"Error computing marker genes: {e}")
                 logger.exception("Error computing marker genes")
         
-        # ========== 5. Metadata Enrichment ==========
+        # ========== 5. Gene Weights / Domain Drivers ==========
         st.divider()
-        st.subheader("6. Metadata Enrichment")
+        st.subheader("6. Gene Weights: Top Drivers for This Domain")
+        st.caption(
+            "Shows which genes drive this domain/cluster assignment. "
+            "Positive logFC = enriched in this group; negative = depleted. "
+            "When the 'novae' package is not installed, log fold change vs. "
+            "all other cells is used as a proxy weight."
+        )
+
+        col1, col2 = st.columns(2)
+        with col1:
+            n_top_weights = st.number_input(
+                "Top N genes (per direction)", value=20, min_value=1, max_value=200,
+                key="n_top_weights",
+            )
+        with col2:
+            weight_direction = st.selectbox(
+                "Show",
+                options=["All (top absolute)", "Positive only", "Negative only"],
+                key="weight_direction",
+            )
+
+        @st.cache_data(show_spinner=False)
+        def get_domain_weights(_adata, _label_col, _group_id, _n_top):
+            return cluster_interpretation.compute_domain_weights(
+                _adata,
+                label_col=_label_col,
+                group_id=_group_id,
+                n_top=_n_top,
+                store_in_uns=True,
+            )
+
+        with st.spinner("Computing gene weights..."):
+            try:
+                weights_df = get_domain_weights(adata, label_col, selected_group, n_top_weights)
+
+                if weight_direction == "Positive only":
+                    weights_df = weights_df[weights_df["direction"] == "positive"].reset_index(drop=True)
+                elif weight_direction == "Negative only":
+                    weights_df = weights_df[weights_df["direction"] == "negative"].reset_index(drop=True)
+
+                if len(weights_df) == 0:
+                    st.warning("No gene weights available for this group.")
+                else:
+                    st.dataframe(weights_df, use_container_width=True)
+
+                    weights_csv = weights_df.to_csv(index=False)
+                    st.download_button(
+                        label="Export Gene Weights (CSV)",
+                        data=weights_csv,
+                        file_name=f"weights_{label_col}_{selected_group}.csv",
+                        mime="text/csv",
+                        key="dl_weights",
+                    )
+
+            except Exception as e:
+                st.error(f"Error computing gene weights: {e}")
+                logger.exception("Error computing domain weights")
+
+        # ========== 6. Metadata Enrichment ==========
+        st.divider()
+        st.subheader("7. Metadata Enrichment")
         
         # Cell type composition
         celltype_col = cluster_interpretation.utils.get_celltype_column(adata)
@@ -891,8 +991,8 @@ elif page == "🔬 Domains & Markers":
 
 
 # ==================== Export Page ====================
-elif page == "💾 Export":
-    st.header("💾 Export Results")
+elif page == "Export":
+    st.header("Export Results")
 
     if not st.session_state.novae_done:
         st.warning("Please run Novae first")
@@ -921,11 +1021,6 @@ elif page == "💾 Export":
                         input_files=[],
                         parameters=adata.uns.get("novae_params", {}),
                     )
-
-                    # Add spatial diagnostics
-                    if "spatial_connectivities" in adata.obsp:
-                        diag = spatial.graph_diagnostics(adata)
-                        manifest = export.add_spatial_summary_to_manifest(manifest, diag)
 
                     # Save manifest
                     manifest_file = Path(output_dir) / "run_manifest.json"
