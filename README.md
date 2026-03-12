@@ -13,7 +13,7 @@ This toolkit bridges the gap between R/Seurat spatial analysis workflows and Pyt
 - **Dual modality support**: 
   - CosMx (transcriptomics): Zero-shot inference with pretrained models
   - PhenoCycler (proteomics): Train-from-scratch workflow
-- **Spatial analysis**: Build spatial neighbor graphs, assign domains, compute embeddings
+- **Spatial QC**: Bounding-box coordinate filters (X/Y min/max) to remove surrounding whitespace
 - **R-friendly exports**: CSV domains, Parquet embeddings, JSON manifests, and R import snippets
 
 ## Features
@@ -28,30 +28,28 @@ This toolkit bridges the gap between R/Seurat spatial analysis workflows and Pyt
 
 ### Quality Control
 - Interactive filtering based on metadata (nCount_RNA, nFeature_RNA, Area, QC flags, etc.)
-- Real-time spatial visualizations showing kept vs. filtered cells
+- Optional spatial bounding-box filter (X min/max, Y min/max) to remove tissue edges or whitespace
+- Real-time spatial visualizations showing kept vs. filtered cells with adjustable point size
 - Summary statistics and plots
-
-### Spatial Analysis
-- Build spatial neighbor graphs (radius-based or k-nearest neighbors)
-- Graph diagnostics: degree distribution, connected components, edge visualization
-- Downsample for efficient visualization of large datasets
 
 ### Novae Model
 - **CosMx mode**: Load pretrained models (e.g., MICS-Lab/novae-human-0) for zero-shot inference
 - **PhenoCycler mode**: Train from scratch with appropriate preprocessing
-- Configurable parameters: neighbors, domains, embedding dimensions, epochs
+- When the optional `novae` package is not installed, a proxy mode (UMAP + Leiden) is used automatically with a clear UI message
+- Configurable parameters: domains, embedding dimensions, epochs
 - Intelligent caching for responsive GUI experience
 
 ### Visualization
-- Spatial scatter plots colored by domains, niches, QC flags, cell types
+- Spatial scatter plots colored by domains, QC flags, cell types
+- Adjustable point size to keep cells visible at any zoom level
 - Embedding plots (PCA, UMAP) colored by metadata
 - Per-domain summaries: cell counts, composition, marker features
 
-### Niche Analysis (Optional)
-- Compute neighborhood composition features using cell type labels
-- Cluster neighborhoods into niche states
-- Confidence-weighted composition using posterior probabilities
-- Export niche assignments and summaries
+### Domains and Markers
+- For each domain/cluster, view top driving genes (by log fold change vs. rest)
+- Filter by direction: top positive contributors, top negative contributors, or top absolute
+- Export gene weights to CSV for downstream analysis
+- Results cached in `adata.uns['xspatialnovae_domain_weights']`
 
 ## Installation
 
@@ -406,10 +404,10 @@ Then in the browser:
   - For .rds: Configure assay and coordinate mappings
   - For .h5ad: Ready to use immediately
 - Review and adjust detected mappings (coordinates, sample ID, cell types)
-- Apply QC filters with live preview
-- Build spatial neighbors and review diagnostics
-- Run Novae model (zero-shot or train-from-scratch)
+- Apply QC filters with live preview (including optional X/Y bounding-box filter)
+- Run Novae model (zero-shot with pretrained model, or proxy mode with UMAP+Leiden)
 - Visualize results (domains, embeddings, compositions)
+- Explore gene weights driving each domain assignment
 - Export R-friendly outputs
 
 **Option B: Command Line**
@@ -419,7 +417,7 @@ novae-seurat-gui convert mydata.rds --outdir ./data
 
 # Full pipeline
 novae-seurat-gui validate data.h5ad
-novae-seurat-gui preprocess data.h5ad --neighbors-radius 150
+novae-seurat-gui preprocess data.h5ad
 novae-seurat-gui run-novae data.h5ad --model MICS-Lab/novae-human-0 --n-domains 10
 novae-seurat-gui export data.h5ad --output-dir results/
 ```
@@ -523,17 +521,16 @@ XSpatialNovae/
 │   │   ├── converter.py
 │   │   └── convert.py             # RDS to H5AD conversion
 │   ├── qc/                        # Quality control
-│   │   ├── filters.py
+│   │   ├── filters.py             # Includes coordinate bounding-box filter
 │   │   └── summaries.py
-│   ├── spatial/                   # Spatial analysis
-│   │   ├── neighbors.py
-│   │   └── diagnostics.py
 │   ├── modeling/                  # Novae wrappers
 │   │   ├── novae_runner.py
 │   │   └── parameters.py
-│   ├── niche/                     # Niche analysis (optional)
-│   │   ├── composition.py
-│   │   └── clustering.py
+│   ├── cluster_interpretation/    # Domain and marker analysis
+│   │   ├── markers.py             # Marker genes and domain gene weights
+│   │   ├── summaries.py
+│   │   ├── visualization.py
+│   │   └── utils.py
 │   ├── viz/                       # Visualization utilities
 │   │   ├── spatial_plots.py
 │   │   └── embedding_plots.py
@@ -550,7 +547,7 @@ XSpatialNovae/
 │   ├── test_io.py
 │   ├── test_convert.py            # Conversion tests
 │   ├── test_qc.py
-│   ├── test_spatial.py
+│   ├── test_cluster_interpretation.py
 │   └── test_export.py
 ├── examples/                      # Example scripts
 │   ├── example_workflow.py

@@ -741,8 +741,12 @@ elif page == "Domains & Markers":
         if pd.api.types.is_numeric_dtype(original_type):
             try:
                 selected_group = type(adata.obs[label_col].iloc[0])(selected_group)
-            except Exception:
-                pass
+            except (ValueError, TypeError):
+                logger.debug(
+                    "Could not coerce selected group '%s' to dtype %s; keeping as string.",
+                    selected_group,
+                    original_type,
+                )
         
         st.info(f"Analyzing group: **{selected_group}**")
         

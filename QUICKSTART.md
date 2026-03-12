@@ -109,12 +109,12 @@ streamlit run app.py
 ```
 
 Navigate through the tabs:
-1. **Load Data** → Upload H5AD file
-2. **QC Filtering** → Filter cells by metadata
-3. **Spatial Neighbors** → Build neighbor graph
-4. **Run Novae** → Preprocess and run model
-5. **Results** → Visualize domains and embeddings
-6. **Export** → Generate R-friendly outputs
+1. **Load Data** - Upload H5AD file
+2. **QC Filtering** - Filter cells by metadata and optional X/Y bounding box
+3. **Run Novae** - Preprocess and run model (or proxy mode if `novae` not installed)
+4. **Results** - Visualize domains and embeddings
+5. **Domains & Markers** - Explore gene weights driving each domain
+6. **Export** - Generate R-friendly outputs
 
 ### 2. Command Line Interface
 
@@ -122,9 +122,8 @@ Navigate through the tabs:
 # Validate H5AD file
 novae-seurat-gui validate data.h5ad
 
-# Preprocess (normalize, PCA, neighbors)
+# Preprocess (normalize, PCA)
 novae-seurat-gui preprocess data.h5ad \
-    --neighbors-radius 150 \
     --n-top-genes 2000 \
     --output preprocessed.h5ad
 
@@ -182,7 +181,6 @@ docker-compose up
 ```bash
 # Preprocess with transcriptomics defaults
 novae-seurat-gui preprocess data.h5ad \
-    --neighbors-radius 150 \
     --n-top-genes 2000 \
     --output preprocessed.h5ad
 
