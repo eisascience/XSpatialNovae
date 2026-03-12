@@ -7,7 +7,7 @@ from typing import Optional
 
 import click
 
-from . import io, qc, spatial, modeling, export
+from . import io, qc, modeling, export
 
 
 # Configure logging
@@ -67,16 +67,14 @@ def validate(input_file, strict):
 @main.command()
 @click.argument("input_file", type=click.Path(exists=True))
 @click.option("--output", "-o", type=click.Path(), help="Output H5AD file")
-@click.option("--neighbors-radius", type=float, default=150.0, help="Neighbor radius")
-@click.option("--neighbors-k", type=int, help="Number of neighbors (KNN)")
 @click.option("--n-top-genes", type=int, default=2000, help="Number of HVGs")
 @click.option("--n-comps", type=int, default=50, help="Number of PCA components")
 @click.option("--random-state", type=int, default=42, help="Random seed")
 def preprocess(
-    input_file, output, neighbors_radius, neighbors_k, n_top_genes, n_comps, random_state
+    input_file, output, n_top_genes, n_comps, random_state
 ):
     """
-    Preprocess H5AD: normalize, PCA, spatial neighbors.
+    Preprocess H5AD: normalize, PCA.
 
     INPUT_FILE: Path to H5AD file
     """
@@ -107,16 +105,6 @@ def preprocess(
         n_comps=n_comps,
         random_state=random_state,
     )
-
-    # Build spatial neighbors
-    if neighbors_k:
-        adata = spatial.compute_neighbors(
-            adata, method="knn", n_neighbors=neighbors_k
-        )
-    else:
-        adata = spatial.compute_neighbors(
-            adata, method="radius", radius=neighbors_radius
-        )
 
     # Save
     output_file = output or input_file.replace(".h5ad", "_preprocessed.h5ad")
@@ -179,12 +167,6 @@ def summarize(input_file, output):
     # QC summary
     qc_summary = qc.compute_qc_summary(adata)
 
-    # Spatial diagnostics (if graph exists)
-    if "spatial_connectivities" in adata.obsp:
-        spatial_diag = spatial.graph_diagnostics(adata)
-    else:
-        spatial_diag = None
-
     # Domain summary
     domain_summary = None
     if "domain" in adata.obs:
@@ -194,7 +176,6 @@ def summarize(input_file, output):
     # Combine
     summary = {
         "qc": qc_summary,
-        "spatial": spatial_diag,
         "domains": domain_summary,
     }
 
@@ -238,11 +219,6 @@ def export_cmd(input_file, output_dir, embedding_format):
         input_files=[input_file],
         parameters=adata.uns.get("novae_params", {}),
     )
-
-    # Add diagnostics if available
-    if "spatial_connectivities" in adata.obsp:
-        spatial_diag = spatial.graph_diagnostics(adata)
-        manifest = export.add_spatial_summary_to_manifest(manifest, spatial_diag)
 
     # Save manifest
     manifest_file = Path(output_dir) / "run_manifest.json"

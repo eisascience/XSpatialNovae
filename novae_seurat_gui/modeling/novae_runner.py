@@ -29,6 +29,18 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# Check once at import time whether the real novae package is available.
+try:
+    import novae as _novae  # noqa: F401
+    _NOVAE_AVAILABLE = True
+except ImportError:
+    _NOVAE_AVAILABLE = False
+    logger.info(
+        "Optional 'novae' package not found. "
+        "The proxy mode (UMAP+Leiden) will be used. "
+        "Install 'novae' for the full Novae foundation model."
+    )
+
 
 def get_model_cache_dir() -> Optional[Path]:
     """
@@ -186,12 +198,10 @@ def run_novae_zeroshot(
     ValueError
         If the model cannot be loaded or downloaded.
     """
-    # NOTE: This warning is intentional placeholder behavior
-    # It alerts users that this is a fallback implementation using UMAP
-    # Install the 'novae' package to use the actual Novae model
-    logger.warning(
-        "Novae integration is a placeholder. Install 'novae' package for full functionality."
-    )
+    # When the real novae package is not available, run proxy mode silently.
+    # A one-time INFO message was already emitted at import time.
+    if not _NOVAE_AVAILABLE:
+        logger.info("Running proxy Novae mode (UMAP+Leiden). Install 'novae' for the real model.")
     
     # Get cache directory
     if cache_dir is None:
@@ -311,10 +321,8 @@ def run_novae_training(
     anndata.AnnData
         AnnData with trained Novae model outputs.
     """
-    logger.warning(
-        "Novae training from scratch is a placeholder. "
-        "Install 'novae' package for full functionality."
-    )
+    if not _NOVAE_AVAILABLE:
+        logger.info("Running proxy Novae training mode (UMAP+Leiden). Install 'novae' for the real model.")
 
     logger.info(
         f"Training Novae from scratch: {n_epochs} epochs, "

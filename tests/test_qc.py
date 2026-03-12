@@ -212,3 +212,91 @@ class TestSummaries:
         assert "metric" in comparison.columns
         assert "pre_mean" in comparison.columns
         assert "post_mean" in comparison.columns
+
+
+class TestCoordinateMask:
+    """Tests for create_coordinate_mask."""
+
+    def _make_adata_with_spatial(self, n_obs=50):
+        """Return a minimal AnnData with adata.obsm['spatial']."""
+        import anndata
+        X = np.random.rand(n_obs, 10)
+        obs = pd.DataFrame(index=[f"cell_{i}" for i in range(n_obs)])
+        var = pd.DataFrame(index=[f"gene_{i}" for i in range(10)])
+        adata = anndata.AnnData(X=X, obs=obs, var=var)
+        # Coordinates in [0, 1000) range
+        rng = np.random.default_rng(0)
+        adata.obsm["spatial"] = rng.uniform(0, 1000, size=(n_obs, 2))
+        return adata
+
+    def _make_adata_with_xy_obs(self, n_obs=50):
+        """Return a minimal AnnData with x/y columns in obs."""
+        import anndata
+        X = np.random.rand(n_obs, 10)
+        rng = np.random.default_rng(1)
+        obs = pd.DataFrame(
+            {
+                "x": rng.uniform(0, 1000, size=n_obs),
+                "y": rng.uniform(0, 1000, size=n_obs),
+            },
+            index=[f"cell_{i}" for i in range(n_obs)],
+        )
+        var = pd.DataFrame(index=[f"gene_{i}" for i in range(10)])
+        return anndata.AnnData(X=X, obs=obs, var=var)
+
+    def test_no_bounds_returns_all_true(self):
+        """With no bounds every cell passes."""
+        adata = self._make_adata_with_spatial()
+        mask = filters.create_coordinate_mask(adata)
+        assert mask.dtype == bool
+        assert len(mask) == adata.n_obs
+        assert np.all(mask)
+
+    def test_x_min_filters(self):
+        """x_min removes cells with x < x_min."""
+        adata = self._make_adata_with_spatial()
+        x_min = 500.0
+        mask = filters.create_coordinate_mask(adata, x_min=x_min)
+        assert np.all(adata.obsm["spatial"][mask, 0] >= x_min)
+        # At least some cells kept and some removed
+        assert 0 < int(np.sum(mask)) < adata.n_obs
+
+    def test_x_max_filters(self):
+        """x_max removes cells with x > x_max."""
+        adata = self._make_adata_with_spatial()
+        x_max = 500.0
+        mask = filters.create_coordinate_mask(adata, x_max=x_max)
+        assert np.all(adata.obsm["spatial"][mask, 0] <= x_max)
+
+    def test_y_min_max_filters(self):
+        """y_min and y_max work correctly."""
+        adata = self._make_adata_with_spatial()
+        y_min, y_max = 200.0, 800.0
+        mask = filters.create_coordinate_mask(adata, y_min=y_min, y_max=y_max)
+        coords_y = adata.obsm["spatial"][mask, 1]
+        assert np.all(coords_y >= y_min)
+        assert np.all(coords_y <= y_max)
+
+    def test_tight_bounds_can_remove_all(self):
+        """Bounds outside data range remove all cells."""
+        adata = self._make_adata_with_spatial()
+        mask = filters.create_coordinate_mask(adata, x_min=1e9, x_max=2e9)
+        assert np.sum(mask) == 0
+
+    def test_falls_back_to_obs_xy(self):
+        """Falls back to adata.obs['x'/'y'] when obsm['spatial'] is absent."""
+        adata = self._make_adata_with_xy_obs()
+        x_max = 500.0
+        mask = filters.create_coordinate_mask(adata, x_max=x_max)
+        assert np.all(adata.obs["x"].values[mask] <= x_max)
+
+    def test_raises_when_no_coords(self):
+        """Raises ValueError when no coordinates can be found."""
+        import pytest
+        import anndata
+        X = np.random.rand(10, 5)
+        obs = pd.DataFrame(index=[f"c_{i}" for i in range(10)])
+        var = pd.DataFrame(index=[f"g_{i}" for i in range(5)])
+        adata = anndata.AnnData(X=X, obs=obs, var=var)
+        with pytest.raises(ValueError, match="No spatial coordinates found"):
+            filters.create_coordinate_mask(adata, x_min=0.0)

@@ -196,3 +196,76 @@ class TestVisualization:
         
         assert 'Metric' in display_df.columns
         assert 'Mean (Group)' in display_df.columns
+
+
+class TestDomainWeights:
+    """Tests for compute_domain_weights."""
+
+    def test_returns_dataframe(self, sample_adata):
+        """compute_domain_weights returns a DataFrame."""
+        from novae_seurat_gui.cluster_interpretation.markers import compute_domain_weights
+
+        df = compute_domain_weights(sample_adata, label_col="domain", group_id="A", n_top=5)
+        assert isinstance(df, pd.DataFrame)
+
+    def test_required_columns(self, sample_adata):
+        """Returned DataFrame has gene, logFC, mean_in, mean_out, direction columns."""
+        from novae_seurat_gui.cluster_interpretation.markers import compute_domain_weights
+
+        df = compute_domain_weights(sample_adata, label_col="domain", group_id="A", n_top=5)
+        for col in ("gene", "logFC", "mean_in", "mean_out", "direction"):
+            assert col in df.columns, f"Missing column: {col}"
+
+    def test_direction_values(self, sample_adata):
+        """direction column contains only 'positive' and 'negative'."""
+        from novae_seurat_gui.cluster_interpretation.markers import compute_domain_weights
+
+        df = compute_domain_weights(sample_adata, label_col="domain", group_id="A", n_top=10)
+        assert set(df["direction"].unique()).issubset({"positive", "negative"})
+
+    def test_n_top_limits_rows(self, sample_adata):
+        """Result has at most 2 * n_top rows."""
+        from novae_seurat_gui.cluster_interpretation.markers import compute_domain_weights
+
+        n_top = 5
+        df = compute_domain_weights(sample_adata, label_col="domain", group_id="A", n_top=n_top)
+        assert len(df) <= 2 * n_top
+
+    def test_sorted_by_absolute_logfc(self, sample_adata):
+        """Rows are sorted by descending absolute logFC."""
+        from novae_seurat_gui.cluster_interpretation.markers import compute_domain_weights
+
+        df = compute_domain_weights(sample_adata, label_col="domain", group_id="A", n_top=10)
+        abs_lfc = df["logFC"].abs().values
+        assert list(abs_lfc) == sorted(abs_lfc, reverse=True)
+
+    def test_store_in_uns(self, sample_adata):
+        """Results are stored in adata.uns when store_in_uns=True."""
+        from novae_seurat_gui.cluster_interpretation.markers import compute_domain_weights
+
+        compute_domain_weights(
+            sample_adata, label_col="domain", group_id="A", n_top=5, store_in_uns=True
+        )
+        assert "xspatialnovae_domain_weights" in sample_adata.uns
+        assert "domain" in sample_adata.uns["xspatialnovae_domain_weights"]
+        assert "A" in sample_adata.uns["xspatialnovae_domain_weights"]["domain"]
+
+    def test_not_stored_when_disabled(self, sample_adata):
+        """Results are not stored when store_in_uns=False."""
+        from novae_seurat_gui.cluster_interpretation.markers import compute_domain_weights
+
+        # Remove any prior stored values
+        sample_adata.uns.pop("xspatialnovae_domain_weights", None)
+        compute_domain_weights(
+            sample_adata, label_col="domain", group_id="A", n_top=5, store_in_uns=False
+        )
+        assert "xspatialnovae_domain_weights" not in sample_adata.uns
+
+    def test_invalid_group_raises(self, sample_adata):
+        """Raises ValueError for an unknown group."""
+        from novae_seurat_gui.cluster_interpretation.markers import compute_domain_weights
+
+        with pytest.raises(ValueError, match="no cells"):
+            compute_domain_weights(
+                sample_adata, label_col="domain", group_id="NONEXISTENT", n_top=5
+            )

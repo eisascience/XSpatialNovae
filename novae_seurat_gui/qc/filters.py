@@ -213,6 +213,86 @@ def filter_by_sample(
     return mask.values
 
 
+def create_coordinate_mask(
+    adata: anndata.AnnData,
+    x_min: Optional[float] = None,
+    x_max: Optional[float] = None,
+    y_min: Optional[float] = None,
+    y_max: Optional[float] = None,
+    spatial_key: str = "spatial",
+) -> np.ndarray:
+    """
+    Create a boolean mask filtering cells by spatial X/Y coordinate bounds.
+
+    Prefers ``adata.obsm[spatial_key]`` when present; otherwise falls back to
+    columns ``x`` and ``y`` in ``adata.obs`` if they exist.
+
+    Parameters
+    ----------
+    adata : anndata.AnnData
+        Input AnnData object.
+    x_min : float, optional
+        Minimum X coordinate to keep. If None, no lower bound is applied.
+    x_max : float, optional
+        Maximum X coordinate to keep. If None, no upper bound is applied.
+    y_min : float, optional
+        Minimum Y coordinate to keep. If None, no lower bound is applied.
+    y_max : float, optional
+        Maximum Y coordinate to keep. If None, no upper bound is applied.
+    spatial_key : str
+        Key in ``adata.obsm`` for spatial coordinates (default: ``"spatial"``).
+
+    Returns
+    -------
+    np.ndarray
+        Boolean mask where True indicates cells that satisfy the bounds.
+
+    Raises
+    ------
+    ValueError
+        If no spatial coordinates can be found in the AnnData object.
+    """
+    # Resolve coordinate arrays
+    if spatial_key in adata.obsm:
+        coords = adata.obsm[spatial_key]
+        x_coords = coords[:, 0]
+        y_coords = coords[:, 1]
+        logger.debug("Using adata.obsm['%s'] for coordinate filter", spatial_key)
+    elif "x" in adata.obs.columns and "y" in adata.obs.columns:
+        x_coords = adata.obs["x"].values.astype(float)
+        y_coords = adata.obs["y"].values.astype(float)
+        logger.debug("Using adata.obs['x'/'y'] for coordinate filter")
+    else:
+        raise ValueError(
+            "No spatial coordinates found. Expected adata.obsm['spatial'] "
+            "or adata.obs columns 'x' and 'y'."
+        )
+
+    mask = np.ones(adata.n_obs, dtype=bool)
+
+    if x_min is not None:
+        mask &= x_coords >= x_min
+    if x_max is not None:
+        mask &= x_coords <= x_max
+    if y_min is not None:
+        mask &= y_coords >= y_min
+    if y_max is not None:
+        mask &= y_coords <= y_max
+
+    n_filtered = int(np.sum(~mask))
+    logger.info(
+        "Coordinate filter [x: %s-%s, y: %s-%s]: %d cells filtered, %d remaining",
+        x_min,
+        x_max,
+        y_min,
+        y_max,
+        n_filtered,
+        int(np.sum(mask)),
+    )
+
+    return mask
+
+
 def filter_outliers_mad(
     adata: anndata.AnnData,
     column: str,
