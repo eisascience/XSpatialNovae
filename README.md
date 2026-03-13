@@ -6,6 +6,7 @@ Python-first workflow to run the [Novae spatial foundation model](https://www.na
 
 This toolkit bridges the gap between R/Seurat spatial analysis workflows and Python-based deep learning models for spatial biology. It provides:
 
+- **Direct R API**: Run Novae on an in-memory Seurat object with one function call - see [R/README.md](R/README.md)
 - **Seamless R ↔ Python interoperability**: Load Seurat objects directly from .rds or via H5AD, process with Novae, export results back to R
 - **First-class .rds support**: Upload Seurat .rds files directly in the GUI with automatic conversion to H5AD
 - **Interactive Streamlit GUI**: Visual quality control, parameter tuning, and results exploration
@@ -322,6 +323,17 @@ streamlit run app.py
 ```
 
 ## Quick Start
+
+### R API (in-memory, no file export)
+
+Run Novae directly on a Seurat object without writing any files to disk.
+See [R/README.md](R/README.md) for full details.
+
+```r
+source("R/runNovae.R")
+SerObj <- runNovae(SerObj, python = ".venv/bin/python", n_domains = 10)
+table(SerObj$novae_domain)
+```
 
 ### GUI Mode
 
